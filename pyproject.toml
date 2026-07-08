@@ -1,0 +1,15 @@
+[project]
+name = "ai-email-notification"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "feedparser>=6.0.12",
+    "openai>=1.109.1",
+    "python-dotenv>=1.1.1",
+    "truststore>=0.10.4",
+    "fastapi>=0.115.0",
+    "pydantic>=2.0.0",
+    "requests>=2.32.5",
+    "google-genai>=2.8.0",
+    "pypdf>=5.0.0",
+]

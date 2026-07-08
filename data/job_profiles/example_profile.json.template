@@ -1,0 +1,18 @@
+{
+  "id": "example",
+  "display_name": "Your Name",
+  "cv_source": "data/your_cv.pdf",
+  "cv_md_cache": "data/job_profiles/example_cv.md",
+  "history_file": "data/job_profiles/example_history.md",
+  "to_emails": ["you@example.com"],
+  "bcc_emails": ["admin@example.com"],
+  "candidate_name": "Your Name",
+  "candidate_email": "you@example.com",
+  "candidate_phone": "+1-555-0100",
+  "home_location": "Your City, Israel",
+  "locations": "Jerusalem, Hybrid, Remote",
+  "keywords": "software engineer, backend, Java, hi-tech",
+  "notes": "Optional search preferences",
+  "company_watchlist": "",
+  "log_stem": "job_search_example"
+}

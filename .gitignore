@@ -1,0 +1,33 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Logs and runtime output
+logs/
+*.log
+
+# Personal / candidate data (keep local only)
+data/*.docx
+data/*.pdf
+data/job_search_cv.md
+data/job_search_history.md
+data/ai_trainer_exercises.md
+data/job_profiles/*.json
+data/job_profiles/*_cv.md
+data/job_profiles/*_history.md
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
