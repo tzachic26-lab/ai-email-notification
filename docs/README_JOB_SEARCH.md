@@ -47,6 +47,7 @@ Before a job reaches your inbox, `job_search_quality.py` checks:
 - URL is not hallucinated (invented career-page patterns blocked)
 - HTTP status (404 / DNS failures marked unavailable)
 - LinkedIn “no longer accepting applications” filtered out
+- **Location blocklist:** Palestinian Authority, Palestinian Territories, Gaza, West Bank (override: `JOB_SEARCH_ALLOW_PA_LOCATIONS=1`)
 - Minimum substance (company, title, description, match score)
 
 Jobs **without working links** can still appear with full details, a Google search link, and apply email if found.

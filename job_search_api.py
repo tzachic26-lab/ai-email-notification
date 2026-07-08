@@ -109,6 +109,7 @@ Rules:
 - Include apply_email when the posting shows a contact email; set apply_method accordingly.
 - Search Israeli job boards FIRST (alljobs, drushim, jobnet, LinkedIn) — they have verifiable URLs.
 - Prioritize Jerusalem, Shfela, Beit Shemesh; Tel Aviv / Herzliya / Raanana OK for hybrid/remote.
+- EXCLUDE jobs located in Palestinian Authority, Palestinian Territories, Gaza, or West Bank.
 - English for all text fields.
 - Keep each description under 300 characters to fit JSON output.
 {
@@ -150,6 +151,7 @@ Rules:
 - Use the final LinkedIn job URL, not Google/Vertex search redirects.
 - NEVER return vertexaisearch.cloud.google.com URLs or invented job IDs.
 - source_site = linkedin.com. Same JSON schema. Skip tracked history duplicates.
+- EXCLUDE Palestinian Authority, Palestinian Territories, Gaza, and West Bank locations.
 - English for all text fields.
 
 Respond with JSON only (no markdown fences)."""
@@ -755,10 +757,12 @@ def _listing_from_dict(data: dict, *, discovered_by: str) -> JobListing | None:
     url = normalize_job_url(str(data.get("url", "")).strip(), position_id=position_id)
     posted_date = str(data.get("posted_date", "")).strip()
     description = str(data.get("description", "")).strip()
+    location = str(data.get("location", "")).strip()
     if not is_usable_job_listing(
         url=url,
         company=company,
         title=title,
+        location=location,
         description=description,
         match_score=score,
         match_reasons=match_reasons,
@@ -780,7 +784,7 @@ def _listing_from_dict(data: dict, *, discovered_by: str) -> JobListing | None:
         company=company,
         title=title,
         url=display_url,
-        location=str(data.get("location", "")).strip(),
+        location=location,
         employment_type=str(data.get("employment_type", "")).strip(),
         posted_date=posted_date,
         description=description,
@@ -1111,6 +1115,7 @@ def records_to_listings(records: list[JobRecord]) -> list[JobListing]:
             url=raw_url,
             company=rec.company,
             title=rec.title,
+            location=rec.location,
             description=rec.description,
             match_score=rec.match_score,
             match_reasons=reasons,

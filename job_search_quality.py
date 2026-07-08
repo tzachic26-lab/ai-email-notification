@@ -69,6 +69,16 @@ _GENERIC_CAREER_PATHS = (
 
 _FAKE_POSITION_IDS = frozenset({"12345", "67890", "123456789", "6789"})
 
+# Locations outside Israel proper — excluded unless JOB_SEARCH_ALLOW_PA_LOCATIONS=1
+_BLOCKED_LOCATION_PATTERNS = (
+    re.compile(r"palestinian\s+authority", re.I),
+    re.compile(r"palestinian\s+territor", re.I),
+    re.compile(r"^palestine\s*$", re.I),
+    re.compile(r"^gaza\b", re.I),
+    re.compile(r"gaza\s+strip", re.I),
+    re.compile(r"^west\s+bank\b", re.I),
+)
+
 _LINKEDIN_JOB_ID_RE = re.compile(
     r"linkedin\.com/jobs/view/(?:[^/?#]*-)?(\d{8,})",
     re.I,
@@ -424,6 +434,26 @@ def evaluate_job_url(
     return "verified", "Link verified"
 
 
+def pa_locations_allowed() -> bool:
+    return os.getenv("JOB_SEARCH_ALLOW_PA_LOCATIONS", "0").lower() in ("1", "true", "yes")
+
+
+def is_blocked_job_location(location: str) -> bool:
+    """True if job location is PA / Gaza / West Bank (excluded from Israeli job search)."""
+    if pa_locations_allowed():
+        return False
+    loc = (location or "").strip()
+    if not loc:
+        return False
+    extra = os.getenv("JOB_SEARCH_LOCATION_BLOCKLIST", "")
+    if extra:
+        for part in extra.split(","):
+            needle = part.strip().lower()
+            if needle and needle in loc.lower():
+                return True
+    return any(pattern.search(loc) for pattern in _BLOCKED_LOCATION_PATTERNS)
+
+
 def has_listing_substance(
     *,
     company: str,
@@ -449,6 +479,7 @@ def is_usable_job_listing(
     url: str = "",
     company: str = "",
     title: str = "",
+    location: str = "",
     description: str = "",
     match_score: int,
     match_reasons: list[str],
@@ -458,6 +489,14 @@ def is_usable_job_listing(
     verify_linkedin: bool | None = None,
 ) -> bool:
     """Keep listings with substance; drop closed/stale LinkedIn jobs entirely."""
+    if is_blocked_job_location(location):
+        logger.info(
+            "Skipping blocked location %r: %s | %s",
+            location,
+            company,
+            title,
+        )
+        return False
     if not has_listing_substance(
         company=company,
         title=title,

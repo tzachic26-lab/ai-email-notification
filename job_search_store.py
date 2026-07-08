@@ -294,6 +294,7 @@ def purge_invalid_history_entries(path: Path | None = None) -> tuple[Path, int, 
         reqs = _requirements_from_chunk(chunk)
         posted_date = fields.get("posted", "")
         description = _markdown_section(chunk, "Description")
+        location = fields.get("location", "")
         if not has_listing_substance(
             company=fields.get("company", ""),
             title=entry_header.group("title"),
@@ -308,6 +309,7 @@ def purge_invalid_history_entries(path: Path | None = None) -> tuple[Path, int, 
             url=url,
             company=fields.get("company", ""),
             title=entry_header.group("title"),
+            location=location,
             description=description,
             match_score=score,
             match_reasons=reasons,
