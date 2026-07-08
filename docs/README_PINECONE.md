@@ -11,6 +11,8 @@ Optional **semantic duplicate detection** for job search using OpenAI embeddings
 
 When enabled, jobs that are **worded differently but mean the same role** are skipped before email — even if URL/title changed.
 
+> **Status:** Experimental. Disabled by default (`JOB_SEARCH_VECTOR_DEDUP_READY=0`). Do not enable in production until implementation is complete.
+
 Markdown history (`job_search_history.md`) **stays** as your source of truth. The vector store adds a second “similar meaning?” check.
 
 ---
@@ -149,7 +151,8 @@ New job from LLM
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JOB_SEARCH_VECTOR_DEDUP` | `0` | Set `1` to enable |
+| `JOB_SEARCH_VECTOR_DEDUP_READY` | `0` | Master switch — set `1` only when feature is fully ready |
+| `JOB_SEARCH_VECTOR_DEDUP` | `0` | Set `1` to enable (requires `READY=1`) |
 | `JOB_SEARCH_VECTOR_BACKEND` | `pinecone` | `pinecone` or `chroma` |
 | `PINECONE_API_KEY` | — | Required for Pinecone backend |
 | `PINECONE_INDEX_NAME` | — | Pinecone index name |
@@ -160,6 +163,7 @@ New job from LLM
 ### Disable without removing keys
 
 ```env
+JOB_SEARCH_VECTOR_DEDUP_READY=0
 JOB_SEARCH_VECTOR_DEDUP=0
 ```
 

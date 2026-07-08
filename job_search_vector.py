@@ -31,6 +31,9 @@ def vector_backend() -> str:
 
 
 def vector_dedup_enabled() -> bool:
+    """Off by default until JOB_SEARCH_VECTOR_DEDUP_READY=1 (feature not fully rolled out)."""
+    if os.getenv("JOB_SEARCH_VECTOR_DEDUP_READY", "0").lower() not in ("1", "true", "yes"):
+        return False
     if os.getenv("JOB_SEARCH_VECTOR_DEDUP", "0").lower() not in ("1", "true", "yes"):
         return False
     if vector_backend() == "chroma":
