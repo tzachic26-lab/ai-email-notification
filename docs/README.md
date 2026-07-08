@@ -6,6 +6,7 @@ Detailed guides for every agent and subsystem in **AI Email Notification**.
 |-------|----------------|------------------|
 | [SETUP.md](SETUP.md) | Full installation & first-run checklist | — |
 | [README_JOB_SEARCH.md](README_JOB_SEARCH.md) | CV-based Israeli hi-tech job search | 09:45 & 14:00 |
+| [README_PINECONE.md](README_PINECONE.md) | Optional Pinecone semantic dedup | — |
 | [README_MULTI_PROFILE.md](README_MULTI_PROFILE.md) | Multiple candidates (profiles) | Per profile |
 | [README_TECH_NEWS.md](README_TECH_NEWS.md) | AI/ML tech news digest | 08:15 |
 | [README_TOP_NEWS.md](README_TOP_NEWS.md) | Top 5 Israeli stories (24h) | 08:30 |

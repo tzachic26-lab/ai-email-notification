@@ -149,6 +149,11 @@ def main() -> int:
         help="Send to your addresses only (not the profile recipient / no BCC). For preview before forwarding.",
     )
     parser.add_argument("--resend-preview", action="store_true", help="Resend last dry-run preview HTML.")
+    parser.add_argument(
+        "--backfill-vectors",
+        action="store_true",
+        help="Upload existing markdown history to Pinecone (one-time setup).",
+    )
     args = parser.parse_args()
 
     if args.list_profiles:
@@ -179,6 +184,23 @@ def main() -> int:
         if args.clean_history:
             path, kept, removed = purge_invalid_history_entries()
             logger.info("History cleanup: kept %s, removed %s — %s", kept, removed, path)
+            return 0
+
+        if args.backfill_vectors:
+            from job_search_vector import backfill_history_records, profile_namespace, vector_dedup_enabled
+
+            if not vector_dedup_enabled():
+                logger.error(
+                    "Set JOB_SEARCH_VECTOR_DEDUP=1, PINECONE_API_KEY, and PINECONE_INDEX_NAME in .env first"
+                )
+                return 1
+            _, records = load_history()
+            count, _ = backfill_history_records(records)
+            logger.info(
+                "Pinecone backfill complete: %s job(s) in namespace %r",
+                count,
+                profile_namespace(),
+            )
             return 0
 
         vendor = job_search_vendor()

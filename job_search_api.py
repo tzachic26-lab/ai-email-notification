@@ -33,6 +33,12 @@ from job_search_store import (
     seen_dedupe_keys,
     today_iso,
 )
+from job_search_vector import (
+    check_job_semantic_duplicate,
+    reset_run_embedding_cache,
+    upsert_job_listings,
+    vector_dedup_enabled,
+)
 from llm_providers import LLMVendor, complete_chat, get_openai_client, resolve_vendor, vendor_brand_name
 from urllib.parse import quote
 
@@ -801,9 +807,16 @@ def _listing_from_dict(data: dict, *, discovered_by: str) -> JobListing | None:
     )
 
 
-def _merge_listings(candidates: list[JobListing], seen_keys: set[str]) -> list[JobListing]:
+def _merge_listings(
+    candidates: list[JobListing],
+    seen_keys: set[str],
+    *,
+    use_vector_dedup: bool = True,
+) -> list[JobListing]:
     merged: list[JobListing] = []
     local_keys = set(seen_keys)
+    if use_vector_dedup and vector_dedup_enabled():
+        reset_run_embedding_cache()
     for job in candidates:
         if is_duplicate(
             company=job.company,
@@ -813,6 +826,8 @@ def _merge_listings(candidates: list[JobListing], seen_keys: set[str]) -> list[J
             description=job.description,
             seen_keys=local_keys,
         ):
+            continue
+        if use_vector_dedup and check_job_semantic_duplicate(job):
             continue
         merged.append(job)
         probe = JobRecord(
@@ -967,7 +982,11 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
             except Exception as exc:
                 logger.warning("LinkedIn OpenAI web pass skipped: %s", exc)
 
-    new_jobs = _merge_listings(all_candidates, seen_keys)
+    new_jobs = _merge_listings(
+        all_candidates,
+        seen_keys,
+        use_vector_dedup=not ignore_history,
+    )
     logger.info(
         "Job search: %s candidates -> %s new after dedup (tracked=%s)",
         len(all_candidates),
@@ -1001,6 +1020,8 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
         ]
         path = append_jobs(entries)
         logger.info("Saved %s new jobs to %s", len(entries), path)
+        if vector_dedup_enabled():
+            upsert_job_listings(new_jobs, iso_date=iso_date)
 
     return JobSearchResult(
         iso_date=iso_date,
