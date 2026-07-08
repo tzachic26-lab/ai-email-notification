@@ -25,6 +25,9 @@ data/job_profiles/*.json
 data/job_profiles/*_cv.md
 data/job_profiles/*_history.md
 
+# Local Chroma vector store (optional job dedup)
+data/chroma_job_search/
+
 # OS / IDE
 .DS_Store
 Thumbs.db

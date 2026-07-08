@@ -1,10 +1,11 @@
-"""Semantic job dedup and storage via Pinecone + OpenAI embeddings."""
+"""Semantic job dedup via vector store (Pinecone or local Chroma) + OpenAI embeddings."""
 
 from __future__ import annotations
 
 import hashlib
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from llm_providers import get_openai_client
@@ -15,13 +16,25 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+APP_DIR = Path(__file__).resolve().parent
 EMBEDDING_DIM = 1536  # text-embedding-3-small
 _RUN_EMBEDDING_CACHE: list[list[float]] = []
+_chroma_client = None
+
+
+def vector_backend() -> str:
+    """pinecone (cloud) or chroma (local disk)."""
+    raw = (os.getenv("JOB_SEARCH_VECTOR_BACKEND") or "pinecone").strip().lower()
+    if raw in ("chroma", "local"):
+        return "chroma"
+    return "pinecone"
 
 
 def vector_dedup_enabled() -> bool:
     if os.getenv("JOB_SEARCH_VECTOR_DEDUP", "0").lower() not in ("1", "true", "yes"):
         return False
+    if vector_backend() == "chroma":
+        return True
     if not (os.getenv("PINECONE_API_KEY") or "").strip():
         logger.warning("JOB_SEARCH_VECTOR_DEDUP=1 but PINECONE_API_KEY is not set — vector dedup off")
         return False
@@ -47,6 +60,12 @@ def profile_namespace() -> str:
     profile_id = (os.getenv("JOB_SEARCH_PROFILE_ID") or "default").strip()
     safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in profile_id)
     return safe or "default"
+
+
+def chroma_persist_dir() -> Path:
+    raw = (os.getenv("CHROMA_PERSIST_DIR") or "data/chroma_job_search").strip()
+    path = Path(raw)
+    return path if path.is_absolute() else APP_DIR / path
 
 
 def job_embedding_text(
@@ -79,16 +98,6 @@ def reset_run_embedding_cache() -> None:
     _RUN_EMBEDDING_CACHE.clear()
 
 
-def _pinecone_index():
-    from pinecone import Pinecone
-
-    api_key = (os.getenv("PINECONE_API_KEY") or "").strip()
-    index_name = (os.getenv("PINECONE_INDEX_NAME") or "").strip()
-    pc = Pinecone(api_key=api_key)
-    desc = pc.describe_index(index_name)
-    return pc.Index(host=desc.host)
-
-
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
@@ -112,25 +121,98 @@ def _max_cosine_similarity(a: list[float], others: list[list[float]]) -> float:
     return best
 
 
-def is_semantic_duplicate(
+def _job_metadata(
+    *,
+    company: str,
+    title: str,
+    location: str,
+    url: str,
+    iso_date: str,
+    match_score: int,
+) -> dict[str, Any]:
+    return {
+        "company": (company or "")[:200],
+        "title": (title or "")[:200],
+        "location": (location or "")[:120],
+        "url": (url or "")[:500],
+        "iso_date": iso_date,
+        "profile_id": profile_namespace(),
+        "match_score": int(match_score),
+    }
+
+
+def _pinecone_index():
+    from pinecone import Pinecone
+
+    api_key = (os.getenv("PINECONE_API_KEY") or "").strip()
+    index_name = (os.getenv("PINECONE_INDEX_NAME") or "").strip()
+    pc = Pinecone(api_key=api_key)
+    desc = pc.describe_index(index_name)
+    return pc.Index(host=desc.host)
+
+
+def _chroma_collection():
+    global _chroma_client
+    try:
+        import chromadb
+    except ImportError as exc:
+        raise RuntimeError(
+            "Chroma backend requires chromadb. Run: uv sync --extra chroma"
+        ) from exc
+
+    persist_dir = chroma_persist_dir()
+    persist_dir.mkdir(parents=True, exist_ok=True)
+    if _chroma_client is None:
+        _chroma_client = chromadb.PersistentClient(path=str(persist_dir))
+    name = f"jobs_{profile_namespace()}"
+    return _chroma_client.get_or_create_collection(
+        name=name,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+
+def _chroma_similarity_from_distance(distance: float) -> float:
+    """Chroma cosine distance ≈ 1 - cosine similarity."""
+    return 1.0 - float(distance)
+
+
+def _query_vector_store(
     embedding: list[float],
     *,
     company: str,
     title: str,
 ) -> bool:
-    """True if Pinecone or the current run already has a near-duplicate."""
+    """Return True if a near-duplicate exists in the active backend."""
     threshold = dedup_threshold()
-
-    if _RUN_EMBEDDING_CACHE:
-        if _max_cosine_similarity(embedding, _RUN_EMBEDDING_CACHE) >= threshold:
-            logger.info(
-                "Vector dedup (same run): skipping near-duplicate %s | %s",
-                company,
-                title,
-            )
-            return True
+    backend = vector_backend()
 
     try:
+        if backend == "chroma":
+            collection = _chroma_collection()
+            if collection.count() == 0:
+                return False
+            result = collection.query(
+                query_embeddings=[embedding],
+                n_results=min(3, collection.count()),
+                include=["metadatas", "distances"],
+            )
+            distances = (result.get("distances") or [[]])[0]
+            metas = (result.get("metadatas") or [[]])[0]
+            for dist, meta in zip(distances, metas, strict=False):
+                score = _chroma_similarity_from_distance(dist)
+                if score >= threshold:
+                    meta = meta or {}
+                    logger.info(
+                        "Vector dedup (Chroma score=%.3f): skipping %s | %s (matches %s | %s)",
+                        score,
+                        company,
+                        title,
+                        meta.get("company", "?"),
+                        meta.get("title", "?"),
+                    )
+                    return True
+            return False
+
         index = _pinecone_index()
         result = index.query(
             vector=embedding,
@@ -152,10 +234,65 @@ def is_semantic_duplicate(
                 )
                 return True
     except Exception as exc:
-        logger.warning("Pinecone query failed (job kept): %s", exc)
+        logger.warning("%s query failed (job kept): %s", backend, exc)
         return False
 
     return False
+
+
+def _upsert_vectors(
+    items: list[tuple[str, list[float], dict[str, Any]]],
+) -> int:
+    if not items:
+        return 0
+    backend = vector_backend()
+    namespace = profile_namespace()
+
+    try:
+        if backend == "chroma":
+            collection = _chroma_collection()
+            collection.upsert(
+                ids=[item[0] for item in items],
+                embeddings=[item[1] for item in items],
+                metadatas=[item[2] for item in items],
+            )
+            logger.info(
+                "Chroma upsert: %s job(s) in collection %r (%s)",
+                len(items),
+                collection.name,
+                chroma_persist_dir(),
+            )
+            return len(items)
+
+        index = _pinecone_index()
+        vectors = [(vid, emb, meta) for vid, emb, meta in items]
+        index.upsert(vectors=vectors, namespace=namespace, batch_size=50)
+        logger.info("Pinecone upsert: %s job(s) in namespace %r", len(vectors), namespace)
+        return len(vectors)
+    except Exception as exc:
+        logger.warning("%s upsert failed: %s", backend, exc)
+        return 0
+
+
+def is_semantic_duplicate(
+    embedding: list[float],
+    *,
+    company: str,
+    title: str,
+) -> bool:
+    """True if vector store or the current run already has a near-duplicate."""
+    threshold = dedup_threshold()
+
+    if _RUN_EMBEDDING_CACHE:
+        if _max_cosine_similarity(embedding, _RUN_EMBEDDING_CACHE) >= threshold:
+            logger.info(
+                "Vector dedup (same run): skipping near-duplicate %s | %s",
+                company,
+                title,
+            )
+            return True
+
+    return _query_vector_store(embedding, company=company, title=title)
 
 
 def remember_run_embedding(embedding: list[float]) -> None:
@@ -163,7 +300,7 @@ def remember_run_embedding(embedding: list[float]) -> None:
 
 
 def check_job_semantic_duplicate(job: JobListing) -> bool:
-    """Embed job and check Pinecone + in-run cache. Returns True if duplicate."""
+    """Embed job and check vector store + in-run cache. Returns True if duplicate."""
     if not vector_dedup_enabled():
         return False
     text = job_embedding_text(
@@ -200,46 +337,39 @@ def upsert_job_listings(jobs: list[JobListing], *, iso_date: str) -> int:
     ]
     try:
         embeddings = embed_texts(texts)
-        index = _pinecone_index()
-        vectors: list[tuple[str, list[float], dict[str, Any]]] = []
-        namespace = profile_namespace()
+        items: list[tuple[str, list[float], dict[str, Any]]] = []
         for job, values in zip(jobs, embeddings, strict=True):
             vid = job_vector_id(
                 company=job.company,
                 title=job.title,
                 url=job.url or job.url_hint,
             )
-            vectors.append(
+            items.append(
                 (
                     vid,
                     values,
-                    {
-                        "company": (job.company or "")[:200],
-                        "title": (job.title or "")[:200],
-                        "location": (job.location or "")[:120],
-                        "url": (job.url or job.url_hint or "")[:500],
-                        "iso_date": iso_date,
-                        "profile_id": profile_namespace(),
-                        "match_score": int(job.match_score),
-                    },
+                    _job_metadata(
+                        company=job.company,
+                        title=job.title,
+                        location=job.location,
+                        url=job.url or job.url_hint or "",
+                        iso_date=iso_date,
+                        match_score=job.match_score,
+                    ),
                 )
             )
-        index.upsert(vectors=vectors, namespace=namespace)
-        logger.info(
-            "Pinecone upsert: %s job(s) in namespace %r",
-            len(vectors),
-            namespace,
-        )
-        return len(vectors)
+        return _upsert_vectors(items)
     except Exception as exc:
-        logger.warning("Pinecone upsert failed: %s", exc)
+        logger.warning("Vector upsert failed: %s", exc)
         return 0
 
 
 def backfill_history_records(records: list[JobRecord]) -> tuple[int, int]:
-    """Embed and upsert existing markdown history into Pinecone."""
+    """Embed and upsert existing markdown history into the active vector backend."""
     if not vector_dedup_enabled():
-        raise RuntimeError("Vector dedup is not enabled (JOB_SEARCH_VECTOR_DEDUP + Pinecone env vars)")
+        raise RuntimeError(
+            "Vector dedup is not enabled (JOB_SEARCH_VECTOR_DEDUP=1 and backend config)"
+        )
 
     if not records:
         return 0, 0
@@ -255,25 +385,21 @@ def backfill_history_records(records: list[JobRecord]) -> tuple[int, int]:
         for rec in records
     ]
     embeddings = embed_texts(texts)
-    index = _pinecone_index()
-    namespace = profile_namespace()
-    vectors: list[tuple[str, list[float], dict[str, Any]]] = []
+    items: list[tuple[str, list[float], dict[str, Any]]] = []
     for rec, values in zip(records, embeddings, strict=True):
         vid = job_vector_id(company=rec.company, title=rec.title, url=rec.url)
-        vectors.append(
+        items.append(
             (
                 vid,
                 values,
-                {
-                    "company": (rec.company or "")[:200],
-                    "title": (rec.title or "")[:200],
-                    "location": (rec.location or "")[:120],
-                    "url": (rec.url or "")[:500],
-                    "iso_date": rec.iso_date,
-                    "profile_id": namespace,
-                    "match_score": int(rec.match_score),
-                },
+                _job_metadata(
+                    company=rec.company,
+                    title=rec.title,
+                    location=rec.location,
+                    url=rec.url,
+                    iso_date=rec.iso_date,
+                    match_score=rec.match_score,
+                ),
             )
         )
-    index.upsert(vectors=vectors, namespace=namespace, batch_size=50)
-    return len(vectors), 0
+    return _upsert_vectors(items), 0

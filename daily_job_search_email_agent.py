@@ -191,7 +191,8 @@ def main() -> int:
 
             if not vector_dedup_enabled():
                 logger.error(
-                    "Set JOB_SEARCH_VECTOR_DEDUP=1, PINECONE_API_KEY, and PINECONE_INDEX_NAME in .env first"
+                    "Set JOB_SEARCH_VECTOR_DEDUP=1 and configure Pinecone or Chroma "
+                    "(JOB_SEARCH_VECTOR_BACKEND=chroma) in .env first"
                 )
                 return 1
             _, records = load_history()

@@ -14,3 +14,6 @@ dependencies = [
     "pypdf>=5.0.0",
     "pinecone>=5.0.0",
 ]
+
+[project.optional-dependencies]
+chroma = ["chromadb>=0.5.0"]

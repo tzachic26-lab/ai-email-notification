@@ -1,19 +1,56 @@
-# Pinecone Vector Dedup (Job Search)
+# Vector Dedup — Pinecone or Chroma (Job Search)
 
 ## What is this?
 
-Optional **semantic duplicate detection** for job search using:
+Optional **semantic duplicate detection** for job search using OpenAI embeddings (`text-embedding-3-small`) plus one of:
 
-- **Pinecone** (free tier) — stores job embeddings
-- **OpenAI** `text-embedding-3-small` — turns job text into vectors
+| Backend | Env flag | Best for |
+|---------|----------|----------|
+| **Pinecone** | `JOB_SEARCH_VECTOR_BACKEND=pinecone` | Cloud, free tier, no local DB |
+| **Chroma** | `JOB_SEARCH_VECTOR_BACKEND=chroma` | **Local disk**, private, no Pinecone account |
 
 When enabled, jobs that are **worded differently but mean the same role** are skipped before email — even if URL/title changed.
 
-Markdown history (`job_search_history.md`) **stays** as your source of truth. Pinecone adds a second “similar meaning?” check.
+Markdown history (`job_search_history.md`) **stays** as your source of truth. The vector store adds a second “similar meaning?” check.
 
 ---
 
-## Your steps (one-time setup)
+## Quick start — Chroma (local, recommended for privacy)
+
+No Pinecone signup. Data stays on your PC under `data/chroma_job_search/`.
+
+### 1. Add to `.env`
+
+```env
+JOB_SEARCH_VECTOR_DEDUP=1
+JOB_SEARCH_VECTOR_BACKEND=chroma
+CHROMA_PERSIST_DIR=data/chroma_job_search
+JOB_SEARCH_EMBEDDING_MODEL=text-embedding-3-small
+JOB_SEARCH_VECTOR_DEDUP_THRESHOLD=0.92
+```
+
+(`OPENAI_API_KEY` still required for embeddings.)
+
+### 2. Install & backfill
+
+```powershell
+uv sync --extra chroma
+uv run python daily_job_search_email_agent.py --backfill-vectors --no-retry
+```
+
+### 3. Test
+
+```powershell
+uv run python daily_job_search_email_agent.py --dry-run
+```
+
+Look for log lines: `Vector dedup (Chroma score=...)` or `Chroma upsert: ...`
+
+Each profile gets its own Chroma collection (`jobs_default`, `jobs_roi_atias`, …).
+
+---
+
+## Pinecone setup (cloud alternative)
 
 ### Step 1 — Create a Pinecone account
 
@@ -46,6 +83,7 @@ Wait until the index status is **Ready**.
 
 ```env
 JOB_SEARCH_VECTOR_DEDUP=1
+JOB_SEARCH_VECTOR_BACKEND=pinecone
 PINECONE_API_KEY=pcsk_...your_key...
 PINECONE_INDEX_NAME=job-search
 JOB_SEARCH_EMBEDDING_MODEL=text-embedding-3-small
@@ -112,8 +150,10 @@ New job from LLM
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `JOB_SEARCH_VECTOR_DEDUP` | `0` | Set `1` to enable |
-| `PINECONE_API_KEY` | — | From Pinecone console |
-| `PINECONE_INDEX_NAME` | — | Index name you created |
+| `JOB_SEARCH_VECTOR_BACKEND` | `pinecone` | `pinecone` or `chroma` |
+| `PINECONE_API_KEY` | — | Required for Pinecone backend |
+| `PINECONE_INDEX_NAME` | — | Pinecone index name |
+| `CHROMA_PERSIST_DIR` | `data/chroma_job_search` | Local folder for Chroma backend |
 | `JOB_SEARCH_EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
 | `JOB_SEARCH_VECTOR_DEDUP_THRESHOLD` | `0.92` | Higher = stricter dedup (0.85–0.95) |
 
@@ -148,9 +188,12 @@ JOB_SEARCH_VECTOR_DEDUP=0
 
 ## Privacy
 
-- Vectors go to **your** Pinecone account (cloud).
-- Do **not** commit `PINECONE_API_KEY` to GitHub.
-- Profile JSON and CV files remain local (gitignored).
+| Backend | Where data lives |
+|---------|------------------|
+| **Chroma** | Local folder `data/chroma_job_search/` (gitignored) |
+| **Pinecone** | Your Pinecone cloud account |
+
+Embeddings are computed via **OpenAI** (job title/company/description text only). Do **not** commit API keys to GitHub.
 
 ---
 
