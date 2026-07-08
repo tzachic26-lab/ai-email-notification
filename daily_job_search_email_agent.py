@@ -50,7 +50,7 @@ from job_search_profile import JobSearchProfile, list_profiles, load_profile, pr
 from job_search_store import load_history, purge_invalid_history_entries, today_iso  # noqa: E402
 from llm_providers import LLMVendor  # noqa: E402
 
-DEFAULT_TO = "you@example.com"
+DEFAULT_TO = os.getenv("JOB_SEARCH_TO", "you@example.com")
 SEND_HELPER = APP_DIR / "outlook_send_helper.py"
 LOG_DIR = APP_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)

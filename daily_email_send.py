@@ -9,8 +9,10 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-OUTLOOK_MCP_DIR = Path(r"C:\amdocs\mcp-servers\outlook-mcp-server-v4")
-OUTLOOK_PYTHON = OUTLOOK_MCP_DIR / ".venv" / "Scripts" / "python.exe"
+from outlook_mcp_env import outlook_mcp_dir, outlook_python
+
+OUTLOOK_MCP_DIR = outlook_mcp_dir()
+OUTLOOK_PYTHON = outlook_python()
 SEND_TIMEOUT_SECONDS = 180
 DEFAULT_RETRY_DELAY_SECONDS = 10 * 60
 DEFAULT_MAX_ATTEMPTS = 3  # initial run + 2 retries

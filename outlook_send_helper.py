@@ -11,16 +11,17 @@ import time
 import webbrowser
 from pathlib import Path
 
-OUTLOOK_MCP_DIR = Path(
-    os.getenv("OUTLOOK_MCP_DIR", r"C:\path\to\outlook-mcp-server-v4")
-)
 APP_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(APP_DIR))
-sys.path.insert(0, str(OUTLOOK_MCP_DIR))
 
 from dotenv import load_dotenv
 
 load_dotenv(APP_DIR / ".env", override=True)
+
+from outlook_mcp_env import outlook_mcp_dir  # noqa: E402
+
+OUTLOOK_MCP_DIR = outlook_mcp_dir()
+sys.path.insert(0, str(APP_DIR))
+sys.path.insert(0, str(OUTLOOK_MCP_DIR))
 
 from network_env import configure_http_proxy  # noqa: E402
 

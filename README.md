@@ -1,15 +1,30 @@
 # AI Email Notification
 
-Automated daily news digest emails sent via Outlook, plus an optional Israeli-news web UI and REST API. Headlines are fetched from Google News RSS, summarized in Hebrew with OpenAI or Gemini, and delivered as styled HTML newsletters.
+Automated daily email agents: Israeli news digests, AI/tech headlines, hands-on AI trainer exercises, and **CV-based Israeli hi-tech job search** — delivered via Gmail or Outlook with Gemini/OpenAI summarization.
+
+## Documentation
+
+**Full guides:** [docs/README.md](docs/README.md)
+
+| Guide | Description |
+|-------|-------------|
+| [docs/SETUP.md](docs/SETUP.md) | Installation & first-run checklist |
+| [docs/README_JOB_SEARCH.md](docs/README_JOB_SEARCH.md) | Job search agent (dedup, quality, CLI) |
+| [docs/README_MULTI_PROFILE.md](docs/README_MULTI_PROFILE.md) | Multiple candidates / profiles |
+| [docs/README_EMAIL_DELIVERY.md](docs/README_EMAIL_DELIVERY.md) | Gmail + Outlook pipeline |
+| [docs/README_SCHEDULING.md](docs/README_SCHEDULING.md) | Windows Task Scheduler |
+
+---
 
 ## What This Project Does
 
 | Component | Description | Default schedule |
 |-----------|-------------|------------------|
-| **Israeli news email** | Top 5 Israeli headlines from today, summarized in Hebrew | 08:00 daily |
+| **Job search email** | CV-matched Israeli hi-tech jobs (LinkedIn + boards, dedup history) | 09:45 & 14:00 |
 | **AI/tech news email** | Up to 8 AI/ML stories from global tech outlets (Gemini first, OpenAI fallback) | 08:15 daily |
 | **Top-5 ranked email** | LLM-ranked most important Israeli stories from the last 24 hours | 08:30 daily |
 | **AI trainer email** | Daily hands-on AI engineering exercise (deep-reasoning model) | 09:00 daily |
+| **Israeli news email** | Top 5 Israeli headlines from today, summarized in Hebrew | 08:00 daily |
 | **News UI** (optional) | Gradio browser app for browsing and follow-up Q&A | Manual |
 | **REST API** (optional) | FastAPI endpoints for headlines and follow-up questions | Manual |
 
@@ -238,6 +253,8 @@ Or individually:
 | `setup_daily_tech_news_task.ps1` | `DailyTechAINewsEmail` | 08:15 |
 | `setup_daily_top_news_task.ps1` | `DailyIsraelTopNewsEmail` | 08:30 |
 | `setup_daily_ai_trainer_task.ps1` | `DailyAITrainerEmail` | 09:00 |
+| `setup_daily_job_search_task.ps1` | `DailyJobSearchEmail` | 09:45 & 14:00 |
+| `setup_daily_job_search_profile_task.ps1` | `DailyJobSearchEmail_<id>` | 09:45 & 14:00 |
 | `setup_outlook_auth_at_logon.ps1` | `OutlookAuthServerAtLogon` | At logon |
 
 Verify registration:
@@ -452,6 +469,16 @@ The morning fallback handles daily quota exhaustion automatically. For burst tes
 
 ```
 ai_email_notification/
+├── docs/                          # Detailed per-tool documentation
+│   ├── README.md                  # Documentation index
+│   ├── SETUP.md
+│   ├── README_JOB_SEARCH.md
+│   └── …
+├── daily_job_search_email_agent.py
+├── job_search_api.py              # Job search LLM passes + HTML
+├── job_search_store.py            # Markdown history + dedup
+├── job_search_profile.py          # Multi-candidate profiles
+├── outlook_mcp_env.py             # Outlook MCP path resolution
 ├── daily_news_email_agent.py      # Israeli news daily email
 ├── daily_tech_news_email_agent.py # AI/ML tech daily email (OpenAI only)
 ├── daily_top_news_email_agent.py  # GPT-ranked top-5 email
@@ -534,9 +561,9 @@ uv run python daily_news_email_agent.py --dry-run
 
 Create or update `.env` in the project root with a valid key.
 
-### `Outlook MCP Python not found`
+### `Outlook MCP Python not found` / `No module named 'outlook_client'`
 
-Ensure Outlook MCP is installed at `C:\amdocs\mcp-servers\outlook-mcp-server-v4` with a working `.venv`.
+Set `OUTLOOK_MCP_DIR` in `.env` to your outlook-mcp-server folder. See [docs/README_EMAIL_DELIVERY.md](docs/README_EMAIL_DELIVERY.md).
 
 ### `Outlook not authenticated` / send timeout (180s)
 
