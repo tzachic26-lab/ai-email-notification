@@ -27,6 +27,7 @@ from pathlib import Path
 
 from daily_email_send import (
     configure_scheduled_outlook_env,
+    resolve_daily_recipient,
     run_with_scheduled_retry,
     send_html_email,
 )
@@ -57,14 +58,11 @@ from news_headlines_api import (  # noqa: E402
     format_articles_email_html,
 )
 
-DEFAULT_RECIPIENTS = "you@example.com"
-
-
 def _parse_recipients(raw: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,;]+", raw) if part.strip()]
 
 
-RECIPIENTS = _parse_recipients(os.getenv("DAILY_NEWS_RECIPIENT", DEFAULT_RECIPIENTS))
+RECIPIENTS = _parse_recipients(resolve_daily_recipient("DAILY_NEWS_RECIPIENT"))
 RECIPIENTS_ARG = ",".join(RECIPIENTS)
 NEWS_TOPIC = os.getenv("DAILY_NEWS_TOPIC", DEFAULT_SUBJECT)
 SEND_HELPER = APP_DIR / "outlook_send_helper.py"

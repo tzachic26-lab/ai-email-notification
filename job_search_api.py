@@ -63,6 +63,7 @@ ISRAEL_HITECH_JOB_SITES = [
     ("il.indeed.com", "Indeed Israel"),
     ("comeet.co", "Comeet — startup/tech company jobs"),
     ("jobs.ynet.co.il", "Ynet Jobs"),
+    ("devjobs.co.il", "DevJobs — largest Israeli developer job board"),
     ("linkedin.com/jobs", "LinkedIn Jobs Israel"),
 ]
 
@@ -88,7 +89,7 @@ Search strategy:
 Israeli hi-tech job boards (search ALL of these via web search):
 - alljobs.co.il, drushim.co.il, jobmaster.co.il, jobnet.co.il
 - gotfriends.co.il, ethosia.co.il, seeve.co.il, winwin.co.il, jobinfo.co.il
-- il.indeed.com, comeet.co/jobs, jobs.ynet.co.il, linkedin.com/jobs
+- il.indeed.com, comeet.co/jobs, jobs.ynet.co.il, devjobs.co.il, linkedin.com/jobs
 
 Hi-tech employers & integrators (career pages):
 - Matrix, Ness, Malam, Taldor, SIS, ECI, Check Point, CyberArk, Radware
@@ -105,7 +106,7 @@ Rules:
 - Include position / requisition ID when visible.
 - Include direct URL to the posting (employer or job board page — NOT a search redirect).
 - NEVER construct or guess URLs from company name + role title. Only use URLs found in search results.
-- Valid URL examples: linkedin.com/jobs/view/1234567890, alljobs.co.il/...JobID=..., boards.greenhouse.io/..., comeet.com/jobs/...
+- Valid URL examples: linkedin.com/jobs/view/1234567890, alljobs.co.il/...JobID=..., devjobs.co.il/job-details/4352509432, boards.greenhouse.io/..., comeet.com/jobs/...
 - INVALID (never use): company.com/careers/RoleName-2026, careers.company.com/job/SA-2026 — these are invented slugs.
 - NEVER use vertexaisearch.cloud.google.com or other grounding/search redirect URLs.
 - Do NOT invent jobs, companies, URLs, or requisition numbers.
@@ -113,7 +114,7 @@ Rules:
 - Prefer posts from last 30 days.
 - For LinkedIn: only include jobs still accepting applications (not closed).
 - Include apply_email when the posting shows a contact email; set apply_method accordingly.
-- Search Israeli job boards FIRST (alljobs, drushim, jobnet, LinkedIn) — they have verifiable URLs.
+- Search Israeli job boards FIRST (alljobs, drushim, devjobs, jobnet, LinkedIn) — they have verifiable URLs.
 - Prioritize Jerusalem, Shfela, Beit Shemesh; Tel Aviv / Herzliya / Raanana OK for hybrid/remote.
 - EXCLUDE jobs located in Palestinian Authority, Palestinian Territories, Gaza, or West Bank.
 - English for all text fields.
@@ -178,6 +179,7 @@ Search ONLY these Israeli hi-tech job sites (use web search with site: operator 
 - site:il.indeed.com Israel software OR AI OR architect
 - site:comeet.co jobs Israel
 - site:jobs.ynet.co.il hi-tech
+- site:devjobs.co.il — developer jobs (Software, AI/ML, Full Stack, Backend)
 
 Also search career pages: Matrix, Ness, Malam, monday.com, Wix, Check Point (hi-tech roles only).
 
@@ -435,6 +437,7 @@ def _hitech_rss_queries(cv_text: str) -> list[str]:
         f"site:il.indeed.com {kw_short} Israel",
         f"site:comeet.co {kw_short} Israel jobs",
         f"site:winwin.co.il OR site:jobinfo.co.il {kw_short}",
+        f"site:devjobs.co.il {kw_short} developer Israel",
         f"site:matrix.co.il OR site:ness.com careers {kw_short}",
     ]
 
@@ -450,6 +453,9 @@ def _hitech_board_urls(cv_text: str) -> list[str]:
         "https://www.ethosia.co.il/jobs/",
         "https://www.seeve.co.il/jobs/",
         "https://www.comeet.com/jobs",
+        "https://www.devjobs.co.il/jobs-grid",
+        f"https://www.devjobs.co.il/jobs-grid?developerTypes=Software",
+        "https://www.devjobs.co.il/jobs-grid?developerTypes=AI%2FML",
     ]
 
 

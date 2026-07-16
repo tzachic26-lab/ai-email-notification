@@ -44,6 +44,7 @@ _TRUSTED_JOB_URL_PATTERNS = (
     re.compile(r"smartrecruiters\.com/", re.I),
     re.compile(r"joborderid=\d+", re.I),
     re.compile(r"il\.indeed\.com/viewjob", re.I),
+    re.compile(r"devjobs\.co\.il/job-details/\d+", re.I),
 )
 
 _INVENTED_CAREER_PATH = re.compile(
@@ -101,6 +102,7 @@ _TRUSTED_JOB_HOSTS = (
     "comeet.co",
     "comeet.com",
     "jobs.ynet.co.il",
+    "devjobs.co.il",
     "careers.",
     "jobs.",
     "checkpoint.com",

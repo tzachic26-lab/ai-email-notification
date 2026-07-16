@@ -3,7 +3,7 @@ Top Israeli news from the last 24 hours — LLM-ranked importance + detailed sum
 
 Pipeline (retrieve-then-rerank, common in news aggregators and LLM research):
   1. Collect hard-news candidates from Israeli RSS (last 24h)
-  2. LLM selects the 5 most nationally important stories (Gemini or ChatGPT)
+  2. LLM selects the most nationally important stories (Gemini or ChatGPT)
   3. LLM summarizes each story in Hebrew (facts only)
 """
 
@@ -26,7 +26,6 @@ truststore.inject_into_ssl()
 
 from news_headlines_api import (
     DEFAULT_SUBJECT,
-    EMAIL_MAX_ARTICLES,
     EMAIL_SUMMARY_MODEL,
     MIN_SUMMARY_WORDS,
     MAX_SUMMARY_WORDS,
@@ -34,8 +33,10 @@ from news_headlines_api import (
     TokenUsage,
     _entry_published_at,
     _hebrew_date_display,
+    _has_hard_news_signal,
     _is_excluded_source,
     _is_shallow_or_gossip,
+    hard_news_only_enabled,
     _merge_token_usage,
     _normalize_source_name,
     _rss_entry_datetime,
@@ -50,10 +51,25 @@ from news_headlines_api import (
 )
 from rss_fetch import fetch_attempts, fetch_retry_delay_seconds, parse_feed as _parse_feed
 
-DEFAULT_SUBJECT_TOP = "5 האירועים המרכזיים בישראל — 24 שעות"
+DEFAULT_SUBJECT_TOP = "האירועים המרכזיים בישראל — 24 שעות"
 LOOKBACK_HOURS = 24
-TOP_NEWS_COUNT = EMAIL_MAX_ARTICLES  # 5
 MAX_CANDIDATE_POOL = 45
+
+
+def top_news_count() -> int:
+    raw = os.getenv("DAILY_TOP_NEWS_COUNT", "8")
+    try:
+        return max(1, min(15, int(raw)))
+    except ValueError:
+        return 8
+
+
+def top_news_headline(count: int | None = None) -> str:
+    n = count if count is not None else top_news_count()
+    return f"{n} האירועים המרכזיים בישראל"
+
+
+TOP_NEWS_COUNT = top_news_count()
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +88,7 @@ EXCLUDE completely:
 - Crime blotter, local police stories, trials of private individuals
 - Entertainment, celebrities, sports, lifestyle, consumer tips
 - Gossip, viral fluff, human-interest without national significance
+- Culture, leisure, tourism, food, fashion, TV/reality shows (תרבות, בידור, בילויים, רכילות)
 
 RULES:
 - Pick exactly {count} items by their list index (1-based).
@@ -110,6 +127,8 @@ def _collect_candidate_entry(
     snippet = _strip_html(entry.get("summary", "") or entry.get("description", ""))
     snippet = _strip_urls(snippet)
     if _is_shallow_or_gossip(title, snippet):
+        return None
+    if hard_news_only_enabled() and not _has_hard_news_signal(title, snippet):
         return None
 
     seen_titles.add(title)
@@ -449,8 +468,8 @@ def format_top_news_email_html(
     ai_provider_footer_label: str | None = None,
 ) -> str:
     return format_outlook_newsletter_html(
-        title="5 האירועים המרכזיים בישראל",
-        subject=DEFAULT_SUBJECT,
+        title=top_news_headline(len(articles)),
+        subject=DEFAULT_SUBJECT_TOP,
         articles=articles,
         total_words=total_words,
         summary_model=summary_model,

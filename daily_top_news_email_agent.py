@@ -26,6 +26,7 @@ from pathlib import Path
 
 from daily_email_send import (
     configure_scheduled_outlook_env,
+    resolve_daily_recipient,
     run_with_scheduled_retry,
     send_html_email,
 )
@@ -53,12 +54,11 @@ from israel_top_news_api import (  # noqa: E402
     DEFAULT_SUBJECT,
     fetch_top_israel_articles,
     format_top_news_email_html,
+    top_news_count,
+    top_news_headline,
 )
 
-RECIPIENT = os.getenv(
-    "DAILY_TOP_NEWS_RECIPIENT",
-    os.getenv("DAILY_NEWS_RECIPIENT", "you@example.com"),
-)
+RECIPIENT = resolve_daily_recipient("DAILY_TOP_NEWS_RECIPIENT", "DAILY_NEWS_RECIPIENT")
 SEND_HELPER = APP_DIR / "outlook_send_helper.py"
 LOG_DIR = APP_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -106,6 +106,7 @@ def _build_for_tier(
     )
     articles, _tokens = fetch_top_israel_articles(
         DEFAULT_SUBJECT,
+        count=top_news_count(),
         vendor=vendor,
         rank_model=rank_model,
         summary_model=summary_model,
@@ -119,7 +120,7 @@ def _build_for_tier(
         ai_provider_footer_label=vendor_top_news_footer_label(meta),
     )
     today = date.today().isoformat()
-    email_subject = f"5 האירועים המרכזיים בישראל — 24 שעות — {today}"
+    email_subject = f"{top_news_headline()} — 24 שעות — {today}"
     logger.info("Prepared %s articles (%s words) via %s", len(articles), total_words, vendor)
     for index, article in enumerate(articles, start=1):
         note = article.importance_note or "(no note)"

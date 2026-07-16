@@ -105,12 +105,15 @@ EXCLUDED_SOURCE_ALIASES = (
 
 SHALLOW_GOSSIP_PATTERN = re.compile(
     r"("
-    r"רכילות|סלבריט|סנסצי|ויראל|לא תאמינו|דרמה ב(?:ין|תוך)|"
+    r"רכילות|רכיל|סלבריט|סנסצי|ויראל|לא תאמינו|דרמה ב(?:ין|תוך)|"
+    r"משפיען|משפיענ|סטרימר|streamer|influencer|יוצר(?:י)?\s+תוכן|"
+    r"קלוויקולר|clavicular|"
     r"תמונ(?:ה|ות) hot|פרש(?:ן|נים) ש(?:ח|מ)|מזל(?:\s|)|הורוסקופ|"
     r"נותרו בהלם|התיעוד המפתיע|מפתיע של ה|"
     r"יש\s+לנו\s+בשורה|חוסם\s+פרסומות|adblock|"
+    r"עמוד(?:\s|)(?:שישי|סוף\s+שבוע)|מגזין(?:\s|)עסקים|"
     r"gossip|celebrity|viral video|clickbait|meme|influencer|"
-    r"tiktok|life hack|dating tips|horoscope"
+    r"tiktok|life hack|dating tips|horoscope|tabloid"
     r")",
     re.IGNORECASE,
 )
@@ -131,19 +134,35 @@ CRIME_NEWS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Entertainment, celebrities, pop culture — not hard news.
+# Entertainment, culture, celebrities, pop culture — not hard news.
 ENTERTAINMENT_CULTURE_PATTERN = re.compile(
     r"("
+    r"תרבות|בידור|תוכנ(?:ית|יות)\s+(?:טלוויזיה|טלו|בידור|ריאליטי)|"
     r"זמר(?:ה|ים|ית)?|שחק(?:ן|נית|נים|ניות)|סלב(?:ריט)?|מפורסם(?:ה|ים|ות)?|"
     r"(?:^|\s)אמנ(?:ות|י(?:ת|ים)?)|(?:^|\s)אומ(?:ן|נ(?:ית|ים|יות)?)|הוליווד|אוסקר|"
     r"פרס\s+(?:אמי|גרמי|אופיר)|ריאליטי|אלבום(?:\s|)|הופע(?:ה|ות)|"
     r"אירווי(?:זיון|zyon)|שיר(?:\s|ה\s+)ראשון|להק(?:ה|ת)|"
-    r"פסטיבל\s+(?:סרטים|קאן)|קולנ(?:וע|ועי)|סדר(?:ה|ות)\s+חדש|"
+    r"פסטיבל\s+(?:סרטים|קאן|מוזיקה)|קולנ(?:וע|ועי)|סדר(?:ה|ות)\s+חדש|"
     r"נטflix|נתflix|תוכנית\s+(?:ריאליטי|בידור)|עולם\s+הה(?:יפ|י)ופ|"
+    r"מוזיאון|תיאטרון|תערוכ(?:ה|ות)|ספר(?:\s|)חדש|ספרות|סופר(?:\s|)|"
     r"אופנ(?:ה|ות)|מסעד(?:ה|ות)|מתכון|דיאט(?:ה|ות)|פחות\s+זה\s+יותר|"
     r"לפני\s+ש(?:משלמים|קונים)|מחלק(?:ה|ות)\s+(?:פרימיום|עסקים)|"
     r"singer|actor|actress|album|concert|reality show|box office|"
-    r"red carpet|grammy|emmy|oscar|hollywood|celebrity"
+    r"red carpet|grammy|emmy|oscar|hollywood|celebrity|culture|entertainment"
+    r")",
+    re.IGNORECASE,
+)
+
+# Leisure, lifestyle, tourism — not hard news.
+LEISURE_LIFESTYLE_PATTERN = re.compile(
+    r"("
+    r"בילוי(?:ים)?|פנאי|תיירות|נופש|חופש(?:ה|ות)|טיול(?:ים)?|"
+    r"מלון(?:ים)?|ריזורט(?:ים)?|resort|weekend\s+getaway|"
+    r"לייף\s*סטייל|lifestyle|wellness|spa|יופי|קוסמטיק(?:ה|)|"
+    r"צרכנ(?:ות|י)|מבצע(?:ים)?\s+(?:ב(?:חנות|קניון)|שופינג)|קניון(?:\s|)|"
+    r"מתכונ(?:ים|י)|שף(?:ים|ית)?|אוכל(?:\s|)|"
+    r"עיצוב\s+הבית|דקור|גינ(?:ה|ון)\s+(?:יפה|בית)|"
+    r"leisure|tourism|travel tips|consumer tips|shopping"
     r")",
     re.IGNORECASE,
 )
@@ -161,7 +180,7 @@ SPORTS_NEWS_PATTERN = re.compile(
 # Political, security, diplomacy — keep even if polluted snippet mentions these.
 POLITICAL_NEWS_OVERRIDE_PATTERN = re.compile(
     r"("
-    r"נתניהו|ראש\s+(?:הממשלה|ממשלה)|שר(?:\s|)|ח[\"']כ|כנסת|ממשל(?:ה|ת)?|"
+    r"נתניהו|ראש\s+(?:הממשלה|ממשלה)|(?:^|\s)שר(?:\s|$|[,.:;])|ח[\"']כ|כנסת|ממשל(?:ה|ת)?|"
     r"בג[\"']ץ|ועד(?:ה|ת)|חקיק|דיפלומט|שגריר|הסכם|מלחמה|צה[\"']ל|"
     r"חיל\s+(?:האוויר|הים|היבשה)|מבצע|ביטחון|איראן|לבנון|חמאס|"
     r"כלכלה|שוק|בנק(?:\s|)|ריבית|תקציב|"
@@ -173,12 +192,41 @@ POLITICAL_NEWS_OVERRIDE_PATTERN = re.compile(
 
 SUBSTANTIVE_NEWS_PATTERN = re.compile(
     r"("
-    r"ממשל|כנסת|ביטחון|צה[\"']ל|רצח|פיגוע|מלחמה|הסכם|משפט|עלייה לתורה|"
-    r"כלכלה|שוק|בנק|ריבית|תקציב|דיפלומט|שר(?:\s|)|ראש הממשלה|"
-    r"חקיק|בג[\"']ץ|משטרה|רשות|ועדת|מבצע|ירי|טיל|"
+    r"ממשל|כנסת|ביטחון|צה[\"']ל|רצח|פיגוע|מלחמה|הסכם|"
+    r"(?:^|\s)משפט(?:\s|$|[,.:;])|עלייה לתורה|"
+    r"כלכלה|שוק|בנק|ריבית|תקציב|דיפלומט|(?:^|\s)שר(?:\s|$|[,.:;])|ראש הממשלה|"
+    r"חקיק|בג[\"']ץ|משטרה|רשות|ועד(?:ה|ת)|מבצע|ירי|טיל|"
     r"policy|election|security|economy|court|government|parliament|sanctions"
     r")",
     re.IGNORECASE,
+)
+
+# Obvious soft-news titles — always exclude (no political override).
+SOFT_NEWS_TITLE_PATTERN = re.compile(
+    r"("
+    r"משפיען|משפיענ|סטרימר|streamer|influencer|יוצר(?:י)?\s+תוכן|"
+    r"רכילות|סלבריט|ריאליטי|הופע(?:ה|ות)|אלבום|"
+    r"מלון|ריזורט|נופש|תיירות|בילוי|פנאי|מתכון|מסעד(?:ה|ות)|"
+    r"כדורגל|כדורסל|מונדיאל|"
+    r"celebrity|gossip|resort|tourism|lifestyle|entertainment"
+    r")",
+    re.IGNORECASE,
+)
+
+REFUSAL_SUMMARY_PATTERN = re.compile(
+    r"("
+    r"^SKIP\s*$|"
+    r"לא\s+ניתן\s+לה(?:פיק|עבד)|"
+    r"אינ(?:ם|ן)\s+נכלל(?:ים|ות)\s+תחת|"
+    r"hard\s+news|חדשות\s+קשות|"
+    r"תחום\s+ה(?:תיירות|בידור|תרבות)|"
+    r"לייף[\s-]*סטייל|life[\s-]*style|"
+    r"הפרה\s+של\s+הנחיות|"
+    r"אינו\s+חדשותי|"
+    r"not\s+hard\s+news|"
+    r"cannot\s+(?:produce|write)\s+(?:a\s+)?(?:news\s+)?summary"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 ISRAELI_SOURCES = (
@@ -198,9 +246,11 @@ EDITORIAL STANDARDS:
 - If the snippet lacks detail, say explicitly what is known and what remains unconfirmed.
 - You may add only brief, widely established background context that helps understand the event — not new claims.
 
-CONTENT FOCUS (hard news only):
+CONTENT FOCUS (hard news only — חדשות קשות בלבד):
 - Politics, government, security, diplomacy, economy, legislation, and major public policy.
-- Do NOT cover crime blotter, entertainment, celebrities, sports gossip, or lifestyle fluff.
+- INCLUDE: מדינה, ביטחון, כלכלה, ממשלה, כנסת, משפט ציבורי, דיפלומטיה.
+- EXCLUDE completely: תרבות, רכילות, בידור, בילויים, ספורט, סלבריטים, תיירות/נופש, אוכל/לייפסטייל, פלילים מקומיים (crime blotter).
+- Do NOT cover entertainment, celebrities, sports, gossip, culture, leisure, or lifestyle fluff.
 - What happened, who is involved, when and where (as reported), and verified consequences so far.
 - Why it matters for Israel and for the reader — policy, security, economy, society, or diplomacy as relevant.
 - Cause-and-effect and context only when grounded in the snippet or uncontroversial public knowledge.
@@ -208,7 +258,8 @@ CONTENT FOCUS (hard news only):
 FORMAT:
 - Between {MIN_SUMMARY_WORDS} and {MAX_SUMMARY_WORDS} words.
 - Dense, informative flowing prose — no bullet lists, no markdown, no links, no image references.
-- Return ONLY the summary text in Hebrew."""
+- Return ONLY the summary text in Hebrew.
+- If the story is NOT hard news (culture, gossip, leisure, sports, celebrity, tourism, lifestyle), respond with exactly: SKIP"""
 
 FOLLOWUP_SYSTEM_PROMPT = """You are an expert Israeli news analyst answering follow-up questions in Hebrew.
 Use the article context (source, title, summary) as your primary basis.
@@ -424,31 +475,71 @@ def _is_excluded_source(source: str) -> bool:
     return any(alias.casefold() in lower or lower == alias.casefold() for alias in EXCLUDED_SOURCE_ALIASES)
 
 
+def hard_news_only_enabled() -> bool:
+    return os.getenv("DAILY_NEWS_HARD_ONLY", "1").lower() in ("1", "true", "yes")
+
+
+def _is_soft_news_title(title: str) -> bool:
+    return bool(SOFT_NEWS_TITLE_PATTERN.search(title.strip()))
+
+
 def _is_shallow_or_gossip(title: str, snippet: str) -> bool:
-    """Exclude gossip, crime blotter, entertainment, and sports — hard news only."""
+    """Exclude gossip, culture, leisure, crime blotter, entertainment, and sports — hard news only."""
     title = title.strip()
+    if _is_soft_news_title(title):
+        return True
     # RSS snippets often concatenate unrelated headlines; filter by title first.
-    if SHALLOW_GOSSIP_PATTERN.search(title):
+    for pattern in (
+        SHALLOW_GOSSIP_PATTERN,
+        ENTERTAINMENT_CULTURE_PATTERN,
+        LEISURE_LIFESTYLE_PATTERN,
+        SPORTS_NEWS_PATTERN,
+    ):
+        if pattern.search(title):
+            if not POLITICAL_NEWS_OVERRIDE_PATTERN.search(title):
+                return True
+    if CRIME_NEWS_PATTERN.search(title) and not POLITICAL_NEWS_OVERRIDE_PATTERN.search(title):
         return True
-    if ENTERTAINMENT_CULTURE_PATTERN.search(title):
-        return True
-    if SPORTS_NEWS_PATTERN.search(title):
-        return True
-    if CRIME_NEWS_PATTERN.search(title):
-        return True
+
     combined = f"{title} {snippet.strip()}"
-    if SHALLOW_GOSSIP_PATTERN.search(combined):
-        return True
-    if ENTERTAINMENT_CULTURE_PATTERN.search(combined):
-        return True
-    if SPORTS_NEWS_PATTERN.search(combined):
-        return True
+    for pattern in (
+        SHALLOW_GOSSIP_PATTERN,
+        ENTERTAINMENT_CULTURE_PATTERN,
+        LEISURE_LIFESTYLE_PATTERN,
+        SPORTS_NEWS_PATTERN,
+    ):
+        if pattern.search(combined):
+            if not POLITICAL_NEWS_OVERRIDE_PATTERN.search(title):
+                return True
     if (
         CRIME_NEWS_PATTERN.search(combined)
         and not POLITICAL_NEWS_OVERRIDE_PATTERN.search(title)
     ):
         return True
     return False
+
+
+def _has_hard_news_signal(title: str, snippet: str) -> bool:
+    """True when the headline looks like substantive hard news (title-first; snippet alone is not enough)."""
+    title = title.strip()
+    if _is_soft_news_title(title):
+        return False
+    if POLITICAL_NEWS_OVERRIDE_PATTERN.search(title):
+        return True
+    return bool(SUBSTANTIVE_NEWS_PATTERN.search(title))
+
+
+def _is_refusal_summary(summary: str) -> bool:
+    text = (summary or "").strip()
+    if not text or text.upper() == "SKIP":
+        return True
+    return bool(REFUSAL_SUMMARY_PATTERN.search(text))
+
+
+def _is_usable_news_summary(summary: str) -> bool:
+    if _is_refusal_summary(summary):
+        return False
+    return _word_count(summary) >= max(40, MIN_SUMMARY_WORDS // 4)
 
 
 def _substance_score(title: str, snippet: str) -> int:
@@ -489,6 +580,8 @@ def _collect_rss_entry(
     snippet = _strip_html(entry.get("summary", "") or entry.get("description", ""))
     snippet = _strip_urls(snippet)
     if _is_shallow_or_gossip(title, snippet):
+        return None
+    if hard_news_only_enabled() and not _has_hard_news_signal(title, snippet):
         return None
     seen_titles.add(title)
     return {
@@ -574,6 +667,14 @@ def _select_balanced_items(candidates: list[dict], *, max_articles: int = MAX_AR
         key=lambda item: _substance_score(item["title"], item["snippet"]),
         reverse=True,
     )
+    if hard_news_only_enabled():
+        substantive = [item for item in ranked if _substance_score(item["title"], item["snippet"]) > 0]
+        if substantive:
+            ranked = substantive
+        elif ranked:
+            logger.warning(
+                "No substantive hard-news candidates after filtering — using best available non-soft items"
+            )
     if not ranked:
         return []
 
@@ -689,7 +790,8 @@ def _summary_user_message(
         f"מקור: {source}\n"
         + (f"{publish_line}\n" if publish_line else f"תאריך: {date}\n")
         + f"תקציר: {snippet or 'לא סופק תקציר'}\n\n"
-        f"כתוב סיכום חדשותי בעברית בין {MIN_SUMMARY_WORDS} ל-{MAX_SUMMARY_WORDS} מילים."
+        f"כתוב סיכום חדשותי קשה בלבד בעברית (לא תרבות, לא רכילות, לא בילויים/בידור/ספורט) "
+        f"בין {MIN_SUMMARY_WORDS} ל-{MAX_SUMMARY_WORDS} מילים."
     )
 
 
@@ -711,7 +813,13 @@ def _summarize_rss_item(
         summary_model=summary_model,
         vendor=vendor,
     )
-    if not summary:
+    if not summary or not _is_usable_news_summary(summary):
+        import logging
+
+        logging.getLogger(__name__).info(
+            "Skipping non-hard-news or refusal summary for: %s",
+            item["title"][:80],
+        )
         return None, tokens
 
     word_count = _word_count(summary)
@@ -856,7 +964,8 @@ def fetch_articles(
 
     from llm_providers import LLMVendor, resolve_vendor
 
-    rss_items = _fetch_israel_rss_items(subject, max_articles=max_articles)
+    pool_size = max(max_articles * 4, 20)
+    rss_items = _fetch_israel_rss_items(subject, max_articles=pool_size)
     if not rss_items:
         raise ValueError(f"No Israeli news from today ({TODAY}) was found for this subject")
 
@@ -869,12 +978,16 @@ def fetch_articles(
         vendor=vendor,
     )
     resolved_vendor = resolve_vendor(vendor)
-    workers = 1 if resolved_vendor is LLMVendor.GEMINI else len(rss_items)
+    workers = 1 if resolved_vendor is LLMVendor.GEMINI else min(4, len(rss_items))
     with ThreadPoolExecutor(max_workers=workers) as executor:
         for article, tokens in executor.map(summarize, rss_items):
             _merge_token_usage(total_tokens, tokens)
             if article:
                 articles.append(article)
+            if len(articles) >= max_articles:
+                break
+
+    articles = articles[:max_articles]
 
     if not articles:
         raise ValueError("No valid Israeli news articles were returned for today")

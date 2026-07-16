@@ -26,6 +26,7 @@ from pathlib import Path
 
 from daily_email_send import (
     configure_scheduled_outlook_env,
+    resolve_daily_recipient,
     run_with_scheduled_retry,
     send_html_email,
 )
@@ -56,7 +57,7 @@ from tech_ai_news_api import (  # noqa: E402
     format_tech_ai_email_html,
 )
 
-RECIPIENT = os.getenv("DAILY_TECH_NEWS_RECIPIENT", os.getenv("DAILY_NEWS_RECIPIENT", "you@example.com"))
+RECIPIENT = resolve_daily_recipient("DAILY_TECH_NEWS_RECIPIENT", "DAILY_NEWS_RECIPIENT")
 NEWS_TOPIC = os.getenv("DAILY_TECH_NEWS_TOPIC", DEFAULT_SUBJECT)
 SEND_HELPER = APP_DIR / "outlook_send_helper.py"
 LOG_DIR = APP_DIR / "logs"

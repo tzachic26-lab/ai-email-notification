@@ -35,7 +35,7 @@ Each run executes several passes (configurable via `.env`):
 |------|--------|-----------|
 | Primary chat | Gemini or OpenAI | `JOB_SEARCH_VENDOR` |
 | OpenAI web search | Live web results | `JOB_SEARCH_USE_OPENAI_WEB=1` |
-| Israeli hi-tech boards | Grounded Gemini search | `JOB_SEARCH_HITECH_BOARDS=1` |
+| Israeli hi-tech boards | Grounded Gemini search (AllJobs, Drushim, DevJobs, …) | `JOB_SEARCH_HITECH_BOARDS=1` |
 | LinkedIn | Gemini/OpenAI + optional OpenAI web | `JOB_SEARCH_LINKEDIN=1` |
 
 RSS hints from Google News and job-board feeds are injected into prompts for context.

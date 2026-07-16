@@ -66,6 +66,34 @@ def run_with_scheduled_retry(run_once: Callable[[], int], *, logger, label: str)
     return exit_code
 
 
+_PLACEHOLDER_RECIPIENT = "you@example.com"
+
+
+def resolve_daily_recipient(*env_keys: str) -> str:
+    """First non-empty env var, then GMAIL_TO, then placeholder."""
+    for key in env_keys:
+        val = (os.getenv(key) or "").strip()
+        if val:
+            return val
+    gmail_to = (os.getenv("GMAIL_TO") or "").strip()
+    if gmail_to:
+        return gmail_to
+    return _PLACEHOLDER_RECIPIENT
+
+
+def reject_placeholder_recipients(recipients: str, *, logger, label: str) -> None:
+    parts = [
+        p.strip().lower()
+        for p in recipients.replace(";", ",").split(",")
+        if p.strip()
+    ]
+    if _PLACEHOLDER_RECIPIENT in parts:
+        raise RuntimeError(
+            f"{label}: recipient is {_PLACEHOLDER_RECIPIENT}. "
+            "Set DAILY_NEWS_RECIPIENT (or agent-specific recipient) or GMAIL_TO in .env"
+        )
+
+
 def configure_scheduled_outlook_env() -> None:
     """Scheduled Task runs have no TTY — never block on browser auth."""
     if not sys.stdin.isatty():
@@ -91,6 +119,7 @@ def send_html_email(
     """Send HTML email via Gmail or Outlook based on EMAIL_SEND_PROVIDER."""
     if to_recipients is None:
         to_recipients = [p.strip() for p in recipients_arg.split(",") if p.strip()]
+    reject_placeholder_recipients(",".join(to_recipients), logger=logger, label="send_html_email")
     if bcc_recipients is None and bcc_arg:
         bcc_recipients = [p.strip() for p in bcc_arg.split(",") if p.strip()]
 

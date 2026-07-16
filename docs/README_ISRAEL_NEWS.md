@@ -118,6 +118,7 @@ Docs: `http://127.0.0.1:8000/docs`
 |----------|---------|-------------|
 | `DAILY_NEWS_RECIPIENT` | `you@example.com` | Comma-separated TO |
 | `DAILY_NEWS_TOPIC` | `חדשות ישראל` | RSS search topic |
+| `DAILY_NEWS_HARD_ONLY` | `1` | Exclude culture, gossip, leisure, sports |
 | `OPENAI_EMAIL_SUMMARY_MODEL` | `gpt-4.1-mini` | OpenAI summaries |
 
 ---
@@ -127,7 +128,8 @@ Docs: `http://127.0.0.1:8000/docs`
 | Rule | Detail |
 |------|--------|
 | Excluded source | Haaretz |
-| Excluded content | gossip, crime, entertainment, sports, lifestyle |
+| Excluded content | gossip, culture, leisure, entertainment, sports, lifestyle, crime blotter |
+| Hard news only | `DAILY_NEWS_HARD_ONLY=1` (default) — politics, security, economy, policy |
 | Normalization | Channel/source name cleanup for display |
 
 ---
