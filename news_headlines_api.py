@@ -11,6 +11,7 @@ Run the REST API:
 """
 
 import html
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,6 +35,8 @@ load_dotenv(override=True)
 from network_env import configure_http_proxy
 
 configure_http_proxy()
+
+logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("OPENAI_UI_MODEL", "gpt-4.1-nano")
 EMAIL_SUMMARY_MODEL = os.getenv("OPENAI_EMAIL_SUMMARY_MODEL", "gpt-4.1-mini")
@@ -899,8 +902,14 @@ def ask_followup(article: Article, question: str) -> tuple[str, TokenUsage, str]
         answer = (response.output_text or "").strip()
         if answer:
             return answer, tokens, model
-    except Exception:
-        pass
+        logger.warning("Responses API returned an empty answer for model %s; falling back to Chat Completions", model)
+    except Exception as exc:
+        logger.warning(
+            "Responses API (web_search) failed for model %s: %s; falling back to Chat Completions",
+            model,
+            exc,
+            exc_info=True,
+        )
 
     response = client.chat.completions.create(
         model=model,

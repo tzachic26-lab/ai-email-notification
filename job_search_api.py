@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from env_config import env_int
 from job_search_quality import (
     evaluate_job_url,
     has_listing_substance,
@@ -39,7 +40,14 @@ from job_search_vector import (
     upsert_job_listings,
     vector_dedup_enabled,
 )
-from llm_providers import LLMVendor, complete_chat, get_openai_client, resolve_vendor, vendor_brand_name
+from llm_providers import (
+    LLMVendor,
+    complete_chat,
+    gemini_call_delay_seconds,
+    get_openai_client,
+    resolve_vendor,
+    vendor_brand_name,
+)
 from urllib.parse import quote
 
 from rss_fetch import parse_feed
@@ -248,10 +256,7 @@ def job_search_model(vendor: LLMVendor | None = None) -> str:
 
 
 def max_jobs() -> int:
-    try:
-        return max(1, int(os.getenv("JOB_SEARCH_MAX_JOBS", "15")))
-    except ValueError:
-        return 15
+    return env_int("JOB_SEARCH_MAX_JOBS", 15, minimum=1)
 
 
 def search_locations() -> str:
@@ -390,26 +395,34 @@ def _parse_json_payload(raw: str) -> dict:
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
+    last_error: json.JSONDecodeError | None = None
     for candidate in (text, _sanitize_json_text(text)):
         try:
             return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
+        except json.JSONDecodeError as exc:
+            last_error = exc
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         blob = _sanitize_json_text(match.group(0))
         try:
             return json.loads(blob)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            last_error = exc
     jobs_match = re.search(r'"jobs"\s*:\s*(\[[\s\S]*\])\s*,?\s*"search_notes"', text)
     if jobs_match:
         jobs_blob = _sanitize_json_text(jobs_match.group(1))
-        jobs = json.loads(jobs_blob)
+        try:
+            jobs = json.loads(jobs_blob)
+        except json.JSONDecodeError as exc:
+            raise json.JSONDecodeError(
+                f"Could not recover the jobs array ({exc.msg})", text, 0
+            ) from exc
         notes_match = re.search(r'"search_notes"\s*:\s*"([^"]*)"', text)
         note = notes_match.group(1) if notes_match else "Partial JSON recovery"
+        logger.warning("Recovered jobs array from malformed JSON response: %s", last_error)
         return {"jobs": jobs, "search_notes": note}
-    raise json.JSONDecodeError("No JSON object found", text, 0)
+    detail = f" (last error: {last_error.msg})" if last_error else ""
+    raise json.JSONDecodeError(f"No JSON object found{detail}", text, 0) from last_error
 
 
 def _cv_search_keywords(cv_text: str) -> str:
@@ -907,9 +920,11 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
             if listing:
                 all_candidates.append(listing)
 
+    failed_passes: list[str] = []
+
     if use_openai_web() and os.getenv("OPENAI_API_KEY"):
         if os.getenv("GEMINI_CALL_DELAY_SECONDS"):
-            time.sleep(int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5")))
+            time.sleep(gemini_call_delay_seconds())
         logger.info("Job search secondary pass: OpenAI web search")
         try:
             payload2, label2 = _search_openai_web(user_message)
@@ -923,10 +938,11 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
                     if listing:
                         all_candidates.append(listing)
         except Exception as exc:
-            logger.warning("OpenAI web search pass skipped: %s", exc)
+            logger.warning("OpenAI web search pass skipped: %s", exc, exc_info=True)
+            failed_passes.append(f"OpenAI web search pass failed ({exc})")
 
     if hitech_boards_enabled():
-        delay = int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5"))
+        delay = gemini_call_delay_seconds()
         if delay:
             time.sleep(delay)
         logger.info("Job search Israeli hi-tech boards pass")
@@ -946,10 +962,11 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
                     if listing:
                         all_candidates.append(listing)
         except Exception as exc:
-            logger.warning("Hi-tech boards pass skipped: %s", exc)
+            logger.warning("Hi-tech boards pass skipped: %s", exc, exc_info=True)
+            failed_passes.append(f"Israeli hi-tech boards pass failed ({exc})")
 
     if linkedin_enabled():
-        delay = int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5"))
+        delay = gemini_call_delay_seconds()
         if delay:
             time.sleep(delay)
         logger.info("Job search LinkedIn pass (Gemini/OpenAI)")
@@ -969,7 +986,8 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
                     if listing:
                         all_candidates.append(listing)
         except Exception as exc:
-            logger.warning("LinkedIn Gemini/OpenAI pass skipped: %s", exc)
+            logger.warning("LinkedIn Gemini/OpenAI pass skipped: %s", exc, exc_info=True)
+            failed_passes.append(f"LinkedIn {vendor_brand_name(vendor)} pass failed ({exc})")
 
         if use_openai_web() and os.getenv("OPENAI_API_KEY"):
             time.sleep(delay)
@@ -986,7 +1004,16 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
                         if listing:
                             all_candidates.append(listing)
             except Exception as exc:
-                logger.warning("LinkedIn OpenAI web pass skipped: %s", exc)
+                logger.warning("LinkedIn OpenAI web pass skipped: %s", exc, exc_info=True)
+                failed_passes.append(f"LinkedIn OpenAI web pass failed ({exc})")
+
+    if failed_passes:
+        notes.extend(failed_passes)
+        logger.warning(
+            "Job search completed with %s failed optional pass(es): %s",
+            len(failed_passes),
+            "; ".join(failed_passes),
+        )
 
     new_jobs = _merge_listings(
         all_candidates,

@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from openai import OpenAI
 
+from env_config import env_int
+
 if TYPE_CHECKING:
     from news_headlines_api import TokenUsage
 
@@ -253,11 +255,11 @@ def _is_flash_model(model: str) -> bool:
 
 
 def lite_escalation_threshold() -> int:
-    return max(1, int(os.getenv("GEMINI_LITE_MAX_503_BEFORE_FLASH", "5")))
+    return env_int("GEMINI_LITE_MAX_503_BEFORE_FLASH", 5, minimum=1)
 
 
 def flash_escalation_threshold() -> int:
-    return max(1, int(os.getenv("GEMINI_FLASH_MAX_503_BEFORE_OPENAI", "5")))
+    return env_int("GEMINI_FLASH_MAX_503_BEFORE_OPENAI", 5, minimum=1)
 
 
 def reset_gemini_escalation_state() -> None:
@@ -307,12 +309,16 @@ def _record_flash_transient_failure(model: str) -> None:
 
 
 def gemini_retry_delay_seconds() -> int:
-    return max(1, int(os.getenv("GEMINI_RETRY_DELAY_SECONDS", "5")))
+    return env_int("GEMINI_RETRY_DELAY_SECONDS", 5, minimum=1)
+
+
+def gemini_call_delay_seconds() -> int:
+    return env_int("GEMINI_CALL_DELAY_SECONDS", 5, minimum=0)
 
 
 def _complete_gemini_with_fallback(**kwargs) -> CompletionResult:
     model = kwargs.pop("model")
-    max_attempts = max(1, int(os.getenv("GEMINI_MAX_RETRY_ATTEMPTS", "2")))
+    max_attempts = env_int("GEMINI_MAX_RETRY_ATTEMPTS", 2, minimum=1)
     last_error: Exception | None = None
     for attempt in range(max_attempts):
         try:
@@ -385,7 +391,7 @@ def summarize_with_vendor(
     from news_headlines_api import TokenUsage
 
     if vendor is LLMVendor.GEMINI:
-        time.sleep(int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5")))
+        time.sleep(gemini_call_delay_seconds())
 
     result = complete_chat(
         vendor=vendor,

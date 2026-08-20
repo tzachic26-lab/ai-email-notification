@@ -441,7 +441,8 @@ def _fetch_tech_ai_rss_candidates_once() -> tuple[list[dict], int, int]:
     for feed_url, source_hint, trusted in FEED_CONFIGS:
         try:
             feed = _parse_feed(feed_url)
-        except Exception:
+        except Exception as exc:
+            logger.warning("AI/tech feed %s failed: %s", feed_url, exc)
             feeds_empty += 1
             continue
         if feed.entries:

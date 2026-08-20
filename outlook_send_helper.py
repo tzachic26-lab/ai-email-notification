@@ -111,16 +111,27 @@ async def _verify_token(client: OutlookClient) -> bool:
         user = await client.get_current_user()
         return bool(user.get("mail") or user.get("userPrincipalName"))
     except Exception as exc:
-        logger.info("Token verification failed: %s", exc)
+        logger.warning("Outlook token verification failed: %s", exc, exc_info=True)
         return False
+
+
+def _try_refresh_access_token(client: OutlookClient) -> bool:
+    """Refresh the cached access token, reporting failures instead of ignoring them."""
+    try:
+        refreshed = bool(client.auth_manager.refresh_access_token())
+    except Exception as exc:
+        logger.warning("Outlook token refresh raised an error: %s", exc, exc_info=True)
+        return False
+    if not refreshed:
+        logger.warning("Outlook token refresh did not return a new access token")
+    return refreshed
 
 
 async def _refresh_or_clear(client: OutlookClient) -> bool:
     """Try refresh token; clear cache if refresh fails."""
     client.load_cached_tokens()
     if client.refresh_token:
-        refreshed = client.auth_manager.refresh_access_token()
-        if refreshed:
+        if _try_refresh_access_token(client):
             logger.info("Outlook access token refreshed")
             return True
         logger.warning("Refresh token invalid — clearing cached tokens")
@@ -142,7 +153,7 @@ async def ensure_outlook_authenticated(
 
     client.load_cached_tokens()
     if client.refresh_token:
-        client.auth_manager.refresh_access_token()
+        _try_refresh_access_token(client)
     if await _verify_token(client):
         return True
 
@@ -179,7 +190,7 @@ async def ensure_outlook_authenticated(
 
     client.load_cached_tokens()
     if client.refresh_token:
-        client.auth_manager.refresh_access_token()
+        _try_refresh_access_token(client)
 
     if await _verify_token(client):
         logger.info("Outlook re-authenticated successfully")
@@ -220,6 +231,7 @@ async def main() -> int:
     await client.initialize()
     try:
         if not await ensure_outlook_authenticated(client):
+            logger.error("Outlook authentication failed — aborting send")
             print("Outlook not authenticated", file=sys.stderr)
             return 1
 
@@ -241,6 +253,7 @@ async def main() -> int:
                         bcc_recipients=bcc_recipients or None,
                     )
             if result.get("error"):
+                logger.error("Outlook send failed: %s", result["error"])
                 print(result["error"], file=sys.stderr)
                 return 1
 

@@ -8,6 +8,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
+from env_config import env_int
+
 
 def _parse_recipients(raw: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,;]+", raw) if part.strip()]
@@ -67,23 +69,28 @@ def send_gmail_html_email(
 
     all_recipients = list(dict.fromkeys(to_addrs + bcc_addrs))
 
-    port_raw = (os.getenv("GMAIL_SMTP_PORT") or "587").strip()
-    try:
-        port = int(port_raw)
-    except ValueError:
-        port = 587
+    port = env_int("GMAIL_SMTP_PORT", 587, minimum=1, maximum=65535)
 
     if port == 465:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as smtp:
             smtp.login(address, app_password)
-            smtp.sendmail(address, all_recipients, msg.as_string())
+            refused = smtp.sendmail(address, all_recipients, msg.as_string())
     else:
         with smtplib.SMTP("smtp.gmail.com", port, timeout=60) as smtp:
             smtp.ehlo()
             smtp.starttls()
             smtp.ehlo()
             smtp.login(address, app_password)
-            smtp.sendmail(address, all_recipients, msg.as_string())
+            refused = smtp.sendmail(address, all_recipients, msg.as_string())
+
+    if refused:
+        # smtplib raises when every recipient is refused, so this is a partial failure.
+        logger.warning(
+            "Gmail refused %s of %s recipients: %s",
+            len(refused),
+            len(all_recipients),
+            ", ".join(sorted(refused)),
+        )
 
     logger.info(
         "Gmail sent to %s%s (subject: %s)",

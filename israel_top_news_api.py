@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -49,6 +48,7 @@ from news_headlines_api import (
     format_publish_date_display,
     format_outlook_newsletter_html,
 )
+from env_config import env_int
 from rss_fetch import fetch_attempts, fetch_retry_delay_seconds, parse_feed as _parse_feed
 
 DEFAULT_SUBJECT_TOP = "האירועים המרכזיים בישראל — 24 שעות"
@@ -57,11 +57,7 @@ MAX_CANDIDATE_POOL = 45
 
 
 def top_news_count() -> int:
-    raw = os.getenv("DAILY_TOP_NEWS_COUNT", "8")
-    try:
-        return max(1, min(15, int(raw)))
-    except ValueError:
-        return 8
+    return env_int("DAILY_TOP_NEWS_COUNT", 8, minimum=1, maximum=15)
 
 
 def top_news_headline(count: int | None = None) -> str:
