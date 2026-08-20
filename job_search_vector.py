@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from env_config import env_float
 from llm_providers import get_openai_client
 
 if TYPE_CHECKING:
@@ -52,11 +53,7 @@ def embedding_model() -> str:
 
 
 def dedup_threshold() -> float:
-    raw = os.getenv("JOB_SEARCH_VECTOR_DEDUP_THRESHOLD", "0.92")
-    try:
-        return float(raw)
-    except ValueError:
-        return 0.92
+    return env_float("JOB_SEARCH_VECTOR_DEDUP_THRESHOLD", 0.92, minimum=0.0, maximum=1.0)
 
 
 def profile_namespace() -> str:

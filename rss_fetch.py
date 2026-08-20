@@ -2,28 +2,21 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 
 import feedparser
+
+from env_config import env_float, env_int
 
 logger = logging.getLogger(__name__)
 
 
 def fetch_attempts() -> int:
-    raw = os.getenv("RSS_FETCH_ATTEMPTS", "3")
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return 3
+    return env_int("RSS_FETCH_ATTEMPTS", 3, minimum=1)
 
 
 def fetch_retry_delay_seconds() -> float:
-    raw = os.getenv("RSS_FETCH_RETRY_DELAY_SECONDS", "15")
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        return 15.0
+    return env_float("RSS_FETCH_RETRY_DELAY_SECONDS", 15.0, minimum=0.0)
 
 
 def parse_feed(url: str) -> feedparser.FeedParserDict:

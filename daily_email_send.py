@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from env_config import env_int
 from outlook_mcp_env import outlook_mcp_dir, outlook_python
 
 OUTLOOK_MCP_DIR = outlook_mcp_dir()
@@ -19,19 +20,11 @@ DEFAULT_MAX_ATTEMPTS = 3  # initial run + 2 retries
 
 
 def retry_delay_seconds() -> int:
-    raw = os.getenv("DAILY_EMAIL_RETRY_DELAY_SECONDS", str(DEFAULT_RETRY_DELAY_SECONDS))
-    try:
-        return max(0, int(raw))
-    except ValueError:
-        return DEFAULT_RETRY_DELAY_SECONDS
+    return env_int("DAILY_EMAIL_RETRY_DELAY_SECONDS", DEFAULT_RETRY_DELAY_SECONDS, minimum=0)
 
 
 def max_attempts() -> int:
-    raw = os.getenv("DAILY_EMAIL_MAX_ATTEMPTS", str(DEFAULT_MAX_ATTEMPTS))
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return DEFAULT_MAX_ATTEMPTS
+    return env_int("DAILY_EMAIL_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, minimum=1)
 
 
 def run_with_scheduled_retry(run_once: Callable[[], int], *, logger, label: str) -> int:
