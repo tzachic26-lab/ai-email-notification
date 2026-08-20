@@ -56,13 +56,12 @@ class CompletionResult:
 def get_openai_client() -> OpenAI:
     global _openai_client
     if _openai_client is None:
-        insecure = os.getenv("OPENAI_INSECURE_TLS", "").strip().lower() in ("1", "true", "yes")
-        if insecure:
-            import httpx
+        # Use the OS trust store (corp MITM proxy CAs included) instead of
+        # disabling certificate verification.
+        import truststore
 
-            _openai_client = OpenAI(http_client=httpx.Client(verify=False))
-        else:
-            _openai_client = OpenAI()
+        truststore.inject_into_ssl()
+        _openai_client = OpenAI()
     return _openai_client
 
 
