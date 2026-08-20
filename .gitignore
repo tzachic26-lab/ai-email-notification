@@ -28,6 +28,12 @@ data/job_profiles/*_history.md
 # Local Chroma vector store (optional job dedup)
 data/chroma_job_search/
 
+# Personal browser exports / bookmark dumps (may contain tokens in URLs)
+bookmarks*.html
+
+# Archives (unreviewed third-party code / large blobs)
+*.zip
+
 # OS / IDE
 .DS_Store
 Thumbs.db

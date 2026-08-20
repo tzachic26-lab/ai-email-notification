@@ -13,6 +13,7 @@ Run the REST API:
 import html
 import os
 import re
+import secrets
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
@@ -25,7 +26,7 @@ import truststore
 truststore.inject_into_ssl()
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from llm_providers import get_openai_client
 from pydantic import BaseModel, Field
 
@@ -325,7 +326,7 @@ class FollowupRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     date: str = Field(..., min_length=1, max_length=32)
     source: str = Field(..., min_length=1, max_length=200)
-    summary: str = Field(..., min_length=1)
+    summary: str = Field(..., min_length=1, max_length=20000)
     question: str = Field(..., min_length=1, max_length=1000)
 
 
@@ -1714,22 +1715,31 @@ def headlines_for_prompt(subject: str):
         yield format_error_html("לא נמצאו כתבות תקינות מהיום."), entries
 
 
+def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    """Require X-API-Key when NEWS_API_KEY is configured (no-op otherwise)."""
+    expected = (os.getenv("NEWS_API_KEY") or "").strip()
+    if not expected:
+        return
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "today": TODAY}
 
 
-@app.get("/headlines", response_model=HeadlinesResponse)
+@app.get("/headlines", response_model=HeadlinesResponse, dependencies=[Depends(require_api_key)])
 def get_headlines(subject: str = Query(..., min_length=1, max_length=200)):
     return _headlines_for_subject(subject)
 
 
-@app.post("/headlines", response_model=HeadlinesResponse)
+@app.post("/headlines", response_model=HeadlinesResponse, dependencies=[Depends(require_api_key)])
 def post_headlines(body: HeadlinesRequest):
     return _headlines_for_subject(body.subject)
 
 
-@app.post("/followup", response_model=FollowupResponse)
+@app.post("/followup", response_model=FollowupResponse, dependencies=[Depends(require_api_key)])
 def post_followup(body: FollowupRequest):
     if not os.getenv("OPENAI_API_KEY"):
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not set in .env")
