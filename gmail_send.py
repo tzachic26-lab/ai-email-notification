@@ -8,16 +8,18 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
+from env_config import env_flag, env_text
+
 
 def _parse_recipients(raw: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,;]+", raw) if part.strip()]
 
 
 def gmail_config() -> tuple[str, str, list[str], str | None]:
-    address = (os.getenv("GMAIL_ADDRESS") or "").strip()
+    address = env_text("GMAIL_ADDRESS")
     app_password = (os.getenv("GMAIL_APP_PASSWORD") or "").replace(" ", "")
     to_raw = (os.getenv("GMAIL_TO") or address).strip()
-    from_name = (os.getenv("GMAIL_FROM_NAME") or "").strip() or None
+    from_name = env_text("GMAIL_FROM_NAME") or None
 
     if not address:
         raise RuntimeError("GMAIL_ADDRESS is not set in .env")
@@ -42,7 +44,7 @@ def send_gmail_html_email(
     """Send HTML email. In Gmail mode, defaults to GMAIL_TO only (no BCC unless forced)."""
     address, app_password, default_to, from_name = gmail_config()
 
-    gmail_self_only = os.getenv("GMAIL_SELF_ONLY", "1").lower() in ("1", "true", "yes")
+    gmail_self_only = env_flag("GMAIL_SELF_ONLY", True)
     if to_recipients is not None:
         to_addrs = to_recipients
         bcc_addrs = list(bcc_recipients or [])

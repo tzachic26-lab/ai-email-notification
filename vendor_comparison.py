@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 
 load_dotenv(APP_DIR / ".env", override=True)
 
+from llm_json import parse_json_object  # noqa: E402
 from network_env import configure_http_proxy  # noqa: E402
 
 configure_http_proxy()
@@ -118,10 +119,7 @@ def _judge_summaries(
             temperature=0.1,
             max_tokens=512,
         )
-        raw = result.text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        return json.loads(raw)
+        return parse_json_object(result.text, what="Judge response")
     except Exception as exc:
         logger.warning("Judge failed: %s", exc)
         return {}

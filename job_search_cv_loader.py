@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from env_config import env_flag, env_text
+
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_MD_PATH = APP_DIR / "data" / "job_search_cv.md"
 DEFAULT_DOCX_PATH = APP_DIR / "data" / "cv.docx"
@@ -18,7 +20,7 @@ _W = f"{{{_W_NS}}}"
 
 
 def cv_source_path() -> Path | None:
-    raw = os.getenv("JOB_SEARCH_CV_SOURCE", "").strip()
+    raw = env_text("JOB_SEARCH_CV_SOURCE")
     if raw:
         return _resolve(Path(raw))
     return None
@@ -35,7 +37,7 @@ def md_path() -> Path:
 
 
 def docx_path() -> Path | None:
-    raw = os.getenv("JOB_SEARCH_CV_DOCX", "").strip()
+    raw = env_text("JOB_SEARCH_CV_DOCX")
     if raw:
         return _resolve(Path(raw))
     source = cv_source_path()
@@ -108,7 +110,7 @@ def search_preferences_block() -> str:
     )
     home = os.getenv("JOB_SEARCH_HOME_LOCATION", "Beit Shemesh, Israel")
     home_short = home.split(",")[0].strip() or home
-    notes = os.getenv("JOB_SEARCH_CV_NOTES", "").strip()
+    notes = env_text("JOB_SEARCH_CV_NOTES")
     lines = [
         "## Job search preferences",
         "",
@@ -191,7 +193,7 @@ def load_cv() -> str:
     docx = docx_path()
     md = _resolve(md_path())
 
-    if os.getenv("JOB_SEARCH_SYNC_MD_FROM_DOCX", "1").lower() in ("1", "true", "yes"):
+    if env_flag("JOB_SEARCH_SYNC_MD_FROM_DOCX", True):
         sync_markdown_from_docx()
 
     parts: list[str] = []

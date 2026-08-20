@@ -14,31 +14,21 @@ Schedule (per profile):
 from __future__ import annotations
 
 import argparse
-import asyncio
 import logging
 import os
-import re
 import sys
-from pathlib import Path
 
-from daily_email_send import (
-    configure_scheduled_outlook_env,
-    run_with_scheduled_retry,
-    send_html_email,
+from daily_agent import (
+    LOG_DIR,
+    SEND_HELPER,
+    add_common_agent_args,
+    parse_recipients,
+    require_vendor_api_key,
 )
+from daily_email_send import run_with_scheduled_retry, send_html_email
+from env_config import env_text
 
-import truststore
-
-truststore.inject_into_ssl()
-
-APP_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(APP_DIR))
-
-from dotenv import load_dotenv
-
-load_dotenv(APP_DIR / ".env", override=True)
-
-from job_search_api import (  # noqa: E402
+from job_search_api import (
     JobSearchResult,
     format_job_search_email_html,
     job_search_result_from_history,
@@ -46,26 +36,16 @@ from job_search_api import (  # noqa: E402
     records_to_listings,
     run_job_search,
 )
-from job_search_profile import JobSearchProfile, list_profiles, load_profile, profile_context  # noqa: E402
-from job_search_store import load_history, purge_invalid_history_entries, today_iso  # noqa: E402
-from llm_providers import LLMVendor  # noqa: E402
+from job_search_profile import JobSearchProfile, list_profiles, load_profile, profile_context
+from job_search_store import load_history, purge_invalid_history_entries, today_iso
 
 DEFAULT_TO = os.getenv("JOB_SEARCH_TO", "you@example.com")
-SEND_HELPER = APP_DIR / "outlook_send_helper.py"
-LOG_DIR = APP_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-
-configure_scheduled_outlook_env()
-
-
-def _parse_recipients(raw: str) -> list[str]:
-    return [part.strip() for part in re.split(r"[,;]+", raw) if part.strip()]
 
 
 def _subject_prefix(profile: JobSearchProfile | None) -> str:
     if profile:
         return profile.email_subject_prefix()
-    name = os.getenv("JOB_SEARCH_PROFILE_NAME", "").strip()
+    name = env_text("JOB_SEARCH_PROFILE_NAME")
     if name:
         return f"Job Search — {name}"
     return "Job Search"
@@ -90,14 +70,14 @@ def send_job_email(
     me_only: bool = False,
 ) -> None:
     if me_only:
-        to_list = _parse_recipients(os.getenv("JOB_SEARCH_ME_ONLY_TO", DEFAULT_TO))
+        to_list = parse_recipients(os.getenv("JOB_SEARCH_ME_ONLY_TO", DEFAULT_TO))
         bcc_list: list[str] = []
     elif profile:
         to_list = profile.to_emails
         bcc_list = profile.bcc_emails
     else:
-        to_list = _parse_recipients(os.getenv("JOB_SEARCH_TO", DEFAULT_TO))
-        bcc_list = _parse_recipients(os.getenv("JOB_SEARCH_BCC", ""))
+        to_list = parse_recipients(os.getenv("JOB_SEARCH_TO", DEFAULT_TO))
+        bcc_list = parse_recipients(os.getenv("JOB_SEARCH_BCC", ""))
 
     send_html_email(
         send_helper=SEND_HELPER,
@@ -133,8 +113,7 @@ def main() -> int:
         help="Candidate profile id (JSON in data/job_profiles/<id>.json), e.g. roi_atias",
     )
     parser.add_argument("--list-profiles", action="store_true", help="List available profile IDs and exit.")
-    parser.add_argument("--dry-run", action="store_true", help="Search without sending email.")
-    parser.add_argument("--no-retry", action="store_true", help="Do not retry after failure.")
+    add_common_agent_args(parser)
     parser.add_argument("--no-save", action="store_true", help="Do not append new jobs to history.")
     parser.add_argument("--clean-history", action="store_true", help="Clean this profile's job history and exit.")
     parser.add_argument("--resend-today", action="store_true", help="Resend today's jobs from history.")
@@ -204,12 +183,7 @@ def main() -> int:
             )
             return 0
 
-        vendor = job_search_vendor()
-        if vendor is LLMVendor.OPENAI and not os.getenv("OPENAI_API_KEY"):
-            logger.error("OPENAI_API_KEY is not set in %s", APP_DIR / ".env")
-            return 1
-        if vendor is LLMVendor.GEMINI and not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
-            logger.error("GOOGLE_API_KEY is not set in %s", APP_DIR / ".env")
+        if not require_vendor_api_key(job_search_vendor(), logger):
             return 1
 
         preview_path = profile.preview_file if profile else LOG_DIR / "daily_job_search_preview.html"
@@ -281,7 +255,7 @@ def main() -> int:
                 return 1
 
             if me_only:
-                to_desc = ", ".join(_parse_recipients(os.getenv("JOB_SEARCH_ME_ONLY_TO", DEFAULT_TO)))
+                to_desc = ", ".join(parse_recipients(os.getenv("JOB_SEARCH_ME_ONLY_TO", DEFAULT_TO)))
                 bcc_desc = " (me-only preview)"
             else:
                 to_desc = ", ".join(profile.to_emails) if profile else os.getenv("JOB_SEARCH_TO", DEFAULT_TO)

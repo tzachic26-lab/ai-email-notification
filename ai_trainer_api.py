@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import html
-import json
 import logging
 import os
 import re
 from dataclasses import dataclass
 
+from env_config import env_flag, env_int
+from llm_json import parse_json_object
 from llm_providers import LLMVendor, complete_chat, resolve_vendor, vendor_brand_name
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ def trainer_vendor() -> LLMVendor:
 
 
 def trainer_fallback_vendor() -> LLMVendor | None:
-    if os.getenv("AI_TRAINER_VENDOR_FALLBACK_ENABLED", "1").lower() not in ("1", "true", "yes"):
+    if not env_flag("AI_TRAINER_VENDOR_FALLBACK_ENABLED", True):
         return None
     raw = os.getenv("AI_TRAINER_VENDOR_FALLBACK", "gemini")
     fallback = resolve_vendor(raw)
@@ -89,11 +90,7 @@ def trainer_model(vendor: LLMVendor | None = None) -> str:
 
 
 def _parse_exercise_json(raw: str) -> dict:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
-    return json.loads(text)
+    return parse_json_object(raw, what="Trainer exercise response")
 
 
 def _to_exercise(data: dict, *, model: str, vendor: str) -> TrainerExercise:
@@ -164,11 +161,11 @@ def exercise_from_record(record) -> TrainerExercise:
 
 
 def include_history_in_email() -> bool:
-    return os.getenv("AI_TRAINER_INCLUDE_HISTORY_IN_EMAIL", "0").lower() in ("1", "true", "yes")
+    return env_flag("AI_TRAINER_INCLUDE_HISTORY_IN_EMAIL")
 
 
 def history_rows_in_email() -> int:
-    return max(0, int(os.getenv("AI_TRAINER_HISTORY_IN_EMAIL_MAX", "5")))
+    return env_int("AI_TRAINER_HISTORY_IN_EMAIL_MAX", 5, minimum=0)
 
 
 def _is_transient_llm_error(exc: BaseException) -> bool:
@@ -275,7 +272,7 @@ Return valid JSON only."""
         vendor=vendor,
         system_prompt=TRAINER_SYSTEM_PROMPT,
         user_message=user_message,
-        max_tokens=int(os.getenv("AI_TRAINER_MAX_TOKENS", "4096")),
+        max_tokens=env_int("AI_TRAINER_MAX_TOKENS", 4096),
         temperature=float(os.getenv("AI_TRAINER_TEMPERATURE", "0.65")),
         use_grounding=grounding_enabled,
         json_response=True,
@@ -287,7 +284,7 @@ Return valid JSON only."""
             vendor=vendor,
             system_prompt=TRAINER_SYSTEM_PROMPT,
             user_message=user_message,
-            max_tokens=int(os.getenv("AI_TRAINER_MAX_TOKENS", "4096")),
+            max_tokens=env_int("AI_TRAINER_MAX_TOKENS", 4096),
             temperature=0.75,
             assistant_message=result.text,
             retry_user_message=(

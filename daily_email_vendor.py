@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
+from env_config import env_flag
 from llm_providers import LLMVendor, email_summary_model, resolve_vendor, top_news_rank_model
 from llm_providers import (
     GeminiTierEscalationError,
@@ -36,7 +37,7 @@ def fallback_vendor() -> LLMVendor:
 
 
 def fallback_enabled() -> bool:
-    return os.getenv("LLM_VENDOR_FALLBACK_ENABLED", "1").lower() in ("1", "true", "yes")
+    return env_flag("LLM_VENDOR_FALLBACK_ENABLED", True)
 
 
 def gemini_summary_model() -> str:
@@ -90,6 +91,26 @@ def vendor_top_news_footer_label(meta: VendorEmailMeta) -> str:
 
 def vendor_badge_text(meta: VendorEmailMeta) -> str:
     return vendor_brand_name(meta.vendor)
+
+
+def log_build_meta(
+    logger: logging.Logger,
+    meta: VendorEmailMeta,
+    *,
+    include_rank: bool = False,
+) -> None:
+    """Log which vendor/model tier produced the email."""
+    fallback = f" [fallback: {meta.fallback_tier}]" if meta.fallback_tier else ""
+    if include_rank:
+        logger.info(
+            "Email built with %s (rank=%s, summary=%s)%s",
+            meta.vendor.value,
+            meta.rank_model,
+            meta.model,
+            fallback,
+        )
+    else:
+        logger.info("Email built with %s (%s)%s", meta.vendor.value, meta.model, fallback)
 
 
 @dataclass(frozen=True)

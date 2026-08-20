@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from openai import OpenAI
 
+from env_config import env_flag, env_int
+
 if TYPE_CHECKING:
     from news_headlines_api import TokenUsage
 
@@ -56,7 +58,7 @@ class CompletionResult:
 def get_openai_client() -> OpenAI:
     global _openai_client
     if _openai_client is None:
-        insecure = os.getenv("OPENAI_INSECURE_TLS", "").strip().lower() in ("1", "true", "yes")
+        insecure = env_flag("OPENAI_INSECURE_TLS")
         if insecure:
             import httpx
 
@@ -86,7 +88,7 @@ def resolve_vendor(raw: str | None = None) -> LLMVendor:
 
 
 def gemini_grounding_enabled() -> bool:
-    return os.getenv("GEMINI_GROUNDING", "1").lower() in ("1", "true", "yes")
+    return env_flag("GEMINI_GROUNDING", True)
 
 
 GEMINI_GROUNDING_PROMPT_ADDENDUM = """
@@ -253,11 +255,11 @@ def _is_flash_model(model: str) -> bool:
 
 
 def lite_escalation_threshold() -> int:
-    return max(1, int(os.getenv("GEMINI_LITE_MAX_503_BEFORE_FLASH", "5")))
+    return env_int("GEMINI_LITE_MAX_503_BEFORE_FLASH", 5, minimum=1)
 
 
 def flash_escalation_threshold() -> int:
-    return max(1, int(os.getenv("GEMINI_FLASH_MAX_503_BEFORE_OPENAI", "5")))
+    return env_int("GEMINI_FLASH_MAX_503_BEFORE_OPENAI", 5, minimum=1)
 
 
 def reset_gemini_escalation_state() -> None:
@@ -307,12 +309,12 @@ def _record_flash_transient_failure(model: str) -> None:
 
 
 def gemini_retry_delay_seconds() -> int:
-    return max(1, int(os.getenv("GEMINI_RETRY_DELAY_SECONDS", "5")))
+    return env_int("GEMINI_RETRY_DELAY_SECONDS", 5, minimum=1)
 
 
 def _complete_gemini_with_fallback(**kwargs) -> CompletionResult:
     model = kwargs.pop("model")
-    max_attempts = max(1, int(os.getenv("GEMINI_MAX_RETRY_ATTEMPTS", "2")))
+    max_attempts = env_int("GEMINI_MAX_RETRY_ATTEMPTS", 2, minimum=1)
     last_error: Exception | None = None
     for attempt in range(max_attempts):
         try:
@@ -385,7 +387,7 @@ def summarize_with_vendor(
     from news_headlines_api import TokenUsage
 
     if vendor is LLMVendor.GEMINI:
-        time.sleep(int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5")))
+        time.sleep(env_int("GEMINI_CALL_DELAY_SECONDS", 5))
 
     result = complete_chat(
         vendor=vendor,

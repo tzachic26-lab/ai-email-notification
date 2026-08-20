@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from env_config import env_flag, env_int, env_text
+from llm_json import parse_json_object_lenient, sanitize_json_text, strip_code_fences
 from job_search_quality import (
     evaluate_job_url,
     has_listing_substance,
@@ -232,7 +234,7 @@ def job_search_vendor() -> LLMVendor:
 
 
 def job_search_fallback_vendor() -> LLMVendor | None:
-    if os.getenv("JOB_SEARCH_VENDOR_FALLBACK_ENABLED", "1").lower() not in ("1", "true", "yes"):
+    if not env_flag("JOB_SEARCH_VENDOR_FALLBACK_ENABLED", True):
         return None
     fallback = resolve_vendor(os.getenv("JOB_SEARCH_VENDOR_FALLBACK", "openai"))
     if fallback is job_search_vendor():
@@ -249,7 +251,7 @@ def job_search_model(vendor: LLMVendor | None = None) -> str:
 
 def max_jobs() -> int:
     try:
-        return max(1, int(os.getenv("JOB_SEARCH_MAX_JOBS", "15")))
+        return env_int("JOB_SEARCH_MAX_JOBS", 15, minimum=1)
     except ValueError:
         return 15
 
@@ -259,23 +261,23 @@ def search_locations() -> str:
 
 
 def extra_keywords() -> str:
-    return os.getenv("JOB_SEARCH_KEYWORDS", "").strip()
+    return env_text("JOB_SEARCH_KEYWORDS")
 
 
 def use_openai_web() -> bool:
-    return os.getenv("JOB_SEARCH_USE_OPENAI_WEB", "1").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_USE_OPENAI_WEB", True)
 
 
 def grounding_enabled() -> bool:
-    return os.getenv("JOB_SEARCH_GROUNDING", "1").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_GROUNDING", True)
 
 
 def linkedin_enabled() -> bool:
-    return os.getenv("JOB_SEARCH_LINKEDIN", "1").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_LINKEDIN", True)
 
 
 def hitech_boards_enabled() -> bool:
-    return os.getenv("JOB_SEARCH_HITECH_BOARDS", "1").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_HITECH_BOARDS", True)
 
 
 def _linkedin_search_terms(cv_text: str) -> list[str]:
@@ -351,61 +353,15 @@ def fetch_linkedin_hints(cv_text: str, *, max_items: int = 15) -> str:
     return "\n".join(lines)
 
 
-def _sanitize_json_text(text: str) -> str:
-    """Strip/repair content that breaks json.loads (common in grounded LLM output)."""
-    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
-    # Escape raw newlines/tabs inside JSON string literals
-    out: list[str] = []
-    in_string = False
-    escape = False
-    for ch in text:
-        if escape:
-            out.append(ch)
-            escape = False
-            continue
-        if ch == "\\":
-            escape = True
-            out.append(ch)
-            continue
-        if ch == '"':
-            in_string = not in_string
-            out.append(ch)
-            continue
-        if in_string:
-            if ch == "\n":
-                out.append("\\n")
-                continue
-            if ch == "\r":
-                out.append("\\r")
-                continue
-            if ch == "\t":
-                out.append("\\t")
-                continue
-        out.append(ch)
-    return "".join(out)
-
-
 def _parse_json_payload(raw: str) -> dict:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
-    for candidate in (text, _sanitize_json_text(text)):
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-    match = re.search(r"\{[\s\S]*\}", text)
-    if match:
-        blob = _sanitize_json_text(match.group(0))
-        try:
-            return json.loads(blob)
-        except json.JSONDecodeError:
-            pass
+    text = strip_code_fences(raw)
+    try:
+        return parse_json_object_lenient(text)
+    except json.JSONDecodeError:
+        pass
     jobs_match = re.search(r'"jobs"\s*:\s*(\[[\s\S]*\])\s*,?\s*"search_notes"', text)
     if jobs_match:
-        jobs_blob = _sanitize_json_text(jobs_match.group(1))
-        jobs = json.loads(jobs_blob)
+        jobs = json.loads(sanitize_json_text(jobs_match.group(1)))
         notes_match = re.search(r'"search_notes"\s*:\s*"([^"]*)"', text)
         note = notes_match.group(1) if notes_match else "Partial JSON recovery"
         return {"jobs": jobs, "search_notes": note}
@@ -524,7 +480,7 @@ def fetch_rss_hints(cv_text: str, *, max_items: int = 25) -> str:
 
 
 def company_watchlist() -> str:
-    return os.getenv("JOB_SEARCH_COMPANY_WATCHLIST", "").strip()
+    return env_text("JOB_SEARCH_COMPANY_WATCHLIST")
 
 
 def _build_user_message(
@@ -587,7 +543,7 @@ def _complete_job_search_chat(
                 system_prompt=JOB_SEARCH_SYSTEM_PROMPT,
                 user_message=user_message,
                 model=job_search_model(attempt_vendor),
-                max_tokens=int(os.getenv("JOB_SEARCH_MAX_TOKENS", "8192")),
+                max_tokens=env_int("JOB_SEARCH_MAX_TOKENS", 8192),
                 temperature=float(os.getenv("JOB_SEARCH_TEMPERATURE", "0.3")),
                 use_grounding=use_ground,
                 json_response=not use_ground,
@@ -631,7 +587,7 @@ def _complete_linkedin_search_chat(
                 system_prompt=LINKEDIN_JOB_SEARCH_PROMPT,
                 user_message=user_message,
                 model=job_search_model(attempt_vendor),
-                max_tokens=int(os.getenv("JOB_SEARCH_MAX_TOKENS", "8192")),
+                max_tokens=env_int("JOB_SEARCH_MAX_TOKENS", 8192),
                 temperature=float(os.getenv("JOB_SEARCH_TEMPERATURE", "0.3")),
                 use_grounding=use_ground,
                 json_response=not use_ground,
@@ -675,7 +631,7 @@ def _complete_hitech_boards_search_chat(
                 system_prompt=HITECH_BOARDS_SEARCH_PROMPT,
                 user_message=user_message,
                 model=job_search_model(attempt_vendor),
-                max_tokens=int(os.getenv("JOB_SEARCH_MAX_TOKENS", "8192")),
+                max_tokens=env_int("JOB_SEARCH_MAX_TOKENS", 8192),
                 temperature=float(os.getenv("JOB_SEARCH_TEMPERATURE", "0.3")),
                 use_grounding=use_ground,
                 json_response=not use_ground,
@@ -716,14 +672,14 @@ def _search_openai_web(user_message: str) -> tuple[dict, str]:
             raise RuntimeError("OpenAI web search returned empty response")
         return _parse_json_payload(text), f"ChatGPT web ({model})"
     except Exception as exc:
-        if os.getenv("JOB_SEARCH_OPENAI_CHAT_FALLBACK", "0").lower() in ("1", "true", "yes"):
+        if env_flag("JOB_SEARCH_OPENAI_CHAT_FALLBACK"):
             logger.warning("OpenAI web search failed (%s) — falling back to chat completion", exc)
             result = complete_chat(
                 vendor=LLMVendor.OPENAI,
                 system_prompt=JOB_SEARCH_SYSTEM_PROMPT,
                 user_message=user_message,
                 model=model,
-                max_tokens=int(os.getenv("JOB_SEARCH_MAX_TOKENS", "8192")),
+                max_tokens=env_int("JOB_SEARCH_MAX_TOKENS", 8192),
                 temperature=0.3,
                 json_response=True,
             )
@@ -909,7 +865,7 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
 
     if use_openai_web() and os.getenv("OPENAI_API_KEY"):
         if os.getenv("GEMINI_CALL_DELAY_SECONDS"):
-            time.sleep(int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5")))
+            time.sleep(env_int("GEMINI_CALL_DELAY_SECONDS", 5))
         logger.info("Job search secondary pass: OpenAI web search")
         try:
             payload2, label2 = _search_openai_web(user_message)
@@ -926,7 +882,7 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
             logger.warning("OpenAI web search pass skipped: %s", exc)
 
     if hitech_boards_enabled():
-        delay = int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5"))
+        delay = env_int("GEMINI_CALL_DELAY_SECONDS", 5)
         if delay:
             time.sleep(delay)
         logger.info("Job search Israeli hi-tech boards pass")
@@ -949,7 +905,7 @@ def run_job_search(*, save: bool = True, ignore_history: bool = False) -> JobSea
             logger.warning("Hi-tech boards pass skipped: %s", exc)
 
     if linkedin_enabled():
-        delay = int(os.getenv("GEMINI_CALL_DELAY_SECONDS", "5"))
+        delay = env_int("GEMINI_CALL_DELAY_SECONDS", 5)
         if delay:
             time.sleep(delay)
         logger.info("Job search LinkedIn pass (Gemini/OpenAI)")
@@ -1192,7 +1148,7 @@ def job_search_result_from_history(iso_date: str | None = None) -> JobSearchResu
 
 
 def format_job_search_email_html(result: JobSearchResult) -> str:
-    profile_name = os.getenv("JOB_SEARCH_PROFILE_NAME", "").strip()
+    profile_name = env_text("JOB_SEARCH_PROFILE_NAME")
     heading = (
         f"Job Search — {html.escape(profile_name)} — {result.iso_date}"
         if profile_name

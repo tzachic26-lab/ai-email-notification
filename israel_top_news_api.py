@@ -9,7 +9,6 @@ Pipeline (retrieve-then-rerank, common in news aggregators and LLM research):
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
@@ -19,6 +18,8 @@ from functools import partial
 from urllib.parse import quote
 
 import feedparser
+
+from llm_json import parse_json_object
 
 import truststore
 
@@ -277,13 +278,7 @@ def _format_candidate_list(candidates: list[dict]) -> str:
 
 
 def _extract_json_object(raw: str) -> dict:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("LLM selection response is not a JSON object")
-    return data
+    return parse_json_object(raw, what="LLM selection response")
 
 
 def _parse_selection_response(raw: str, pool_size: int) -> list[dict]:
