@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
+from env_config import env_flag, env_text
+
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CV_DOCX = APP_DIR / "data" / "cv.docx"
 
@@ -20,7 +22,7 @@ def candidate_contact() -> tuple[str, str, str]:
     """Return (name, email, phone) from env or CV defaults."""
     name = (os.getenv("JOB_SEARCH_CANDIDATE_NAME") or "Your Name").strip()
     email = (os.getenv("JOB_SEARCH_CANDIDATE_EMAIL") or "you@example.com").strip()
-    phone = (os.getenv("JOB_SEARCH_CANDIDATE_PHONE") or "").strip()
+    phone = env_text("JOB_SEARCH_CANDIDATE_PHONE")
     return name, email, phone
 
 
@@ -56,4 +58,4 @@ def build_application_mailto(
 
 
 def auto_apply_enabled() -> bool:
-    return os.getenv("JOB_SEARCH_AUTO_APPLY_EMAIL", "0").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_AUTO_APPLY_EMAIL")

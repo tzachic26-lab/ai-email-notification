@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+
+from env_config import env_text
 
 _LEGACY_OUTLOOK_MCP_DIR = Path(r"C:\amdocs\mcp-servers\outlook-mcp-server-v4")
 
 
 def outlook_mcp_dir() -> Path:
-    raw = (os.getenv("OUTLOOK_MCP_DIR") or "").strip()
+    raw = env_text("OUTLOOK_MCP_DIR")
     if raw:
         path = Path(raw)
         if not path.is_dir():

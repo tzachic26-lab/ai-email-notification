@@ -5,18 +5,45 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
-APP_DIR = Path(__file__).resolve().parent
-DEFAULT_HISTORY_PATH = APP_DIR / "data" / "job_search_history.md"
-
-_ENTRY_HEADER_RE = re.compile(
-    r"^##\s+(?P<iso_date>\d{4}-\d{2}-\d{2})\s+\|\s+(?P<title>.+)$",
-    re.MULTILINE,
+from markdown_store import (
+    APP_DIR,
+    append_entries,
+    iter_entries,
+    markdown_section as _markdown_section,
+    parse_fields,
+    section_bullets,
+    today_iso,
 )
-_FIELD_RE = re.compile(r"^\*\*(?P<key>[^*]+):\*\*\s*(?P<value>.+)$", re.MULTILINE)
+from markdown_store import ensure_history_file as _ensure_history_file
+from markdown_store import history_path as _history_path
+
+__all__ = [
+    "JobRecord",
+    "append_jobs",
+    "dedupe_key",
+    "description_fingerprint",
+    "ensure_history_file",
+    "format_job_markdown",
+    "get_records_for_date",
+    "history_context_for_llm",
+    "history_path",
+    "is_duplicate",
+    "load_history",
+    "parse_jobs",
+    "purge_invalid_history_entries",
+    "seen_dedupe_keys",
+    "today_iso",
+]
+
+DEFAULT_HISTORY_PATH = APP_DIR / "data" / "job_search_history.md"
+HISTORY_INTRO = (
+    "# Job Search History\n\n"
+    "Tracked job listings. Used to filter duplicates on future searches "
+    "(position ID, company + title, URL, or company + description).\n"
+)
 
 
 @dataclass(frozen=True)
@@ -39,23 +66,11 @@ class JobRecord:
 
 
 def history_path() -> Path:
-    from os import getenv
-
-    raw = getenv("JOB_SEARCH_HISTORY_FILE", "")
-    return Path(raw) if raw else DEFAULT_HISTORY_PATH
+    return _history_path("JOB_SEARCH_HISTORY_FILE", DEFAULT_HISTORY_PATH)
 
 
 def ensure_history_file(path: Path | None = None) -> Path:
-    target = path or history_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if not target.exists():
-        target.write_text(
-            "# Job Search History\n\n"
-            "Tracked job listings. Used to filter duplicates on future searches "
-            "(position ID, company + title, URL, or company + description).\n",
-            encoding="utf-8",
-        )
-    return target
+    return _ensure_history_file(path or history_path(), HISTORY_INTRO)
 
 
 def _normalize_text(value: str) -> str:
@@ -96,26 +111,20 @@ def dedupe_key(record: JobRecord) -> tuple[str, ...]:
     return tuple(keys)
 
 
-def _markdown_section(body: str, heading: str) -> str:
-    pattern = rf"### {re.escape(heading)}\s*\n(.*?)(?=\n### |\Z)"
-    match = re.search(pattern, body, re.DOTALL)
-    return match.group(1).strip() if match else ""
+def _match_score(fields: dict[str, str]) -> int:
+    raw = fields.get("match score", "0").replace("%", "").strip()
+    try:
+        return int(float(raw))
+    except ValueError:
+        return 0
 
 
 def parse_jobs(text: str) -> list[JobRecord]:
     records: list[JobRecord] = []
-    chunks = re.split(r"\n---+\n", text)
-    for chunk in chunks:
-        header = _ENTRY_HEADER_RE.search(chunk)
-        if not header:
-            continue
-        fields = {m.group("key").strip().lower(): m.group("value").strip() for m in _FIELD_RE.finditer(chunk)}
+    for chunk, header in iter_entries(text):
+        fields = parse_fields(chunk)
         desc = _markdown_section(chunk, "Description")
-        score_raw = fields.get("match score", "0").replace("%", "").strip()
-        try:
-            score = int(float(score_raw))
-        except ValueError:
-            score = 0
+        score = _match_score(fields)
         records.append(
             JobRecord(
                 iso_date=header.group("iso_date"),
@@ -241,29 +250,11 @@ def format_job_markdown(
 
 
 def _match_reasons_from_chunk(chunk: str) -> list[str]:
-    section = _markdown_section(chunk, "Why it matches")
-    reasons: list[str] = []
-    for line in section.splitlines():
-        text = line.strip()
-        if not text.startswith("-"):
-            continue
-        value = text.lstrip("- ").strip()
-        if value and value not in ("—", "-"):
-            reasons.append(value)
-    return reasons
+    return section_bullets(chunk, "Why it matches")
 
 
 def _requirements_from_chunk(chunk: str) -> list[str]:
-    section = _markdown_section(chunk, "Key requirements")
-    reqs: list[str] = []
-    for line in section.splitlines():
-        text = line.strip()
-        if not text.startswith("-"):
-            continue
-        value = text.lstrip("- ").strip()
-        if value and value not in ("—", "-"):
-            reqs.append(value)
-    return reqs
+    return section_bullets(chunk, "Key requirements")
 
 
 def purge_invalid_history_entries(path: Path | None = None) -> tuple[Path, int, int]:
@@ -273,19 +264,11 @@ def purge_invalid_history_entries(path: Path | None = None) -> tuple[Path, int, 
     target = ensure_history_file(path)
     text = target.read_text(encoding="utf-8")
     header, _, _ = text.partition("\n---")
-    chunks = re.split(r"\n---+\n", text)
     kept_chunks: list[str] = []
     removed = 0
-    for chunk in chunks:
-        entry_header = _ENTRY_HEADER_RE.search(chunk)
-        if not entry_header:
-            continue
-        fields = {m.group("key").strip().lower(): m.group("value").strip() for m in _FIELD_RE.finditer(chunk)}
-        score_raw = fields.get("match score", "0").replace("%", "").strip()
-        try:
-            score = int(float(score_raw))
-        except ValueError:
-            score = 0
+    for chunk, entry_header in iter_entries(text):
+        fields = parse_fields(chunk)
+        score = _match_score(fields)
         position_id = fields.get("position id", "")
         if position_id in ("—",):
             position_id = ""
@@ -334,11 +317,7 @@ def purge_invalid_history_entries(path: Path | None = None) -> tuple[Path, int, 
         elif url and url != fields.get("url", ""):
             body = re.sub(r"(\*\*URL:\*\*)\s*[^\n]+", rf"\1 {url}", body, count=1)
         kept_chunks.append(body)
-    intro = header.strip() or (
-        "# Job Search History\n\n"
-        "Tracked job listings. Used to filter duplicates on future searches "
-        "(position ID, company + title, URL, or company + description)."
-    )
+    intro = header.strip() or HISTORY_INTRO.strip()
     if kept_chunks:
         target.write_text(f"{intro}\n\n---\n\n" + "\n\n---\n\n".join(kept_chunks) + "\n", encoding="utf-8")
     else:
@@ -347,17 +326,7 @@ def purge_invalid_history_entries(path: Path | None = None) -> tuple[Path, int, 
 
 
 def append_jobs(markdown_entries: list[str], path: Path | None = None) -> Path:
-    target = ensure_history_file(path)
-    text = target.read_text(encoding="utf-8").rstrip()
-    block = "\n\n".join(entry.strip() for entry in markdown_entries if entry.strip())
-    if block and not block.startswith("---"):
-        block = f"---\n\n{block}"
-    target.write_text(f"{text}\n\n{block}\n", encoding="utf-8")
-    return target
-
-
-def today_iso() -> str:
-    return date.today().isoformat()
+    return append_entries(ensure_history_file(path), markdown_entries)
 
 
 def get_records_for_date(iso_date: str, path: Path | None = None) -> list[JobRecord]:

@@ -7,6 +7,8 @@ import socket
 from typing import MutableMapping
 from urllib.parse import urlparse
 
+from env_config import env_flag
+
 CORP_PROXY_URL = "http://genproxy.corp.amdocs.com:8080"
 CORP_PROXY_HOST = "genproxy.corp.amdocs.com"
 CORP_PROXY_PORT = 8080
@@ -39,7 +41,7 @@ def corp_proxy_reachable(*, timeout: float = CORP_PROXY_DETECT_TIMEOUT_SECONDS) 
 
 
 def _auto_proxy_enabled() -> bool:
-    return os.getenv("AUTO_HTTP_PROXY", "1").strip().lower() in ("1", "true", "yes")
+    return env_flag("AUTO_HTTP_PROXY", True)
 
 
 def _strip_proxy_vars(env: MutableMapping[str, str]) -> None:

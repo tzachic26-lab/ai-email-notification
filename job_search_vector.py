@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from env_config import env_flag, env_text
 from llm_providers import get_openai_client
 
 if TYPE_CHECKING:
@@ -32,16 +33,16 @@ def vector_backend() -> str:
 
 def vector_dedup_enabled() -> bool:
     """Off by default until JOB_SEARCH_VECTOR_DEDUP_READY=1 (feature not fully rolled out)."""
-    if os.getenv("JOB_SEARCH_VECTOR_DEDUP_READY", "0").lower() not in ("1", "true", "yes"):
+    if not env_flag("JOB_SEARCH_VECTOR_DEDUP_READY"):
         return False
-    if os.getenv("JOB_SEARCH_VECTOR_DEDUP", "0").lower() not in ("1", "true", "yes"):
+    if not env_flag("JOB_SEARCH_VECTOR_DEDUP"):
         return False
     if vector_backend() == "chroma":
         return True
-    if not (os.getenv("PINECONE_API_KEY") or "").strip():
+    if not env_text("PINECONE_API_KEY"):
         logger.warning("JOB_SEARCH_VECTOR_DEDUP=1 but PINECONE_API_KEY is not set — vector dedup off")
         return False
-    if not (os.getenv("PINECONE_INDEX_NAME") or "").strip():
+    if not env_text("PINECONE_INDEX_NAME"):
         logger.warning("JOB_SEARCH_VECTOR_DEDUP=1 but PINECONE_INDEX_NAME is not set — vector dedup off")
         return False
     return True
@@ -147,8 +148,8 @@ def _job_metadata(
 def _pinecone_index():
     from pinecone import Pinecone
 
-    api_key = (os.getenv("PINECONE_API_KEY") or "").strip()
-    index_name = (os.getenv("PINECONE_INDEX_NAME") or "").strip()
+    api_key = env_text("PINECONE_API_KEY")
+    index_name = env_text("PINECONE_INDEX_NAME")
     pc = Pinecone(api_key=api_key)
     desc = pc.describe_index(index_name)
     return pc.Index(host=desc.host)

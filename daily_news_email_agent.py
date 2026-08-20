@@ -17,85 +17,38 @@ Schedule (8:00 AM daily):
 from __future__ import annotations
 
 import argparse
-import asyncio
-import logging
 import os
-import re
-import sys
 from datetime import date
-from pathlib import Path
 
-from daily_email_send import (
-    configure_scheduled_outlook_env,
-    resolve_daily_recipient,
-    run_with_scheduled_retry,
-    send_html_email,
+from daily_agent import (
+    LOG_DIR,
+    add_common_agent_args,
+    deliver_email,
+    parse_recipients,
+    setup_agent_logging,
 )
+from daily_email_send import resolve_daily_recipient, run_with_scheduled_retry
 from daily_email_vendor import (
     VendorEmailMeta,
     build_with_model_tier_fallback,
+    log_build_meta,
     require_api_keys_for_daily_emails,
-    vendor_email_label,
     vendor_email_footer_label,
+    vendor_email_label,
 )
-
-import truststore
-
-truststore.inject_into_ssl()
-
-APP_DIR = Path(__file__).resolve().parent
-
-sys.path.insert(0, str(APP_DIR))
-
-from dotenv import load_dotenv
-
-load_dotenv(APP_DIR / ".env", override=True)
-
-from news_headlines_api import (  # noqa: E402
+from news_headlines_api import (
     DEFAULT_SUBJECT,
     EMAIL_MAX_ARTICLES,
     fetch_articles,
     format_articles_email_html,
 )
 
-def _parse_recipients(raw: str) -> list[str]:
-    return [part.strip() for part in re.split(r"[,;]+", raw) if part.strip()]
-
-
-RECIPIENTS = _parse_recipients(resolve_daily_recipient("DAILY_NEWS_RECIPIENT"))
-RECIPIENTS_ARG = ",".join(RECIPIENTS)
+RECIPIENTS_ARG = ",".join(parse_recipients(resolve_daily_recipient("DAILY_NEWS_RECIPIENT")))
 NEWS_TOPIC = os.getenv("DAILY_NEWS_TOPIC", DEFAULT_SUBJECT)
-SEND_HELPER = APP_DIR / "outlook_send_helper.py"
-LOG_DIR = APP_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "daily_news_email.log"
+PREVIEW_PATH = LOG_DIR / "daily_news_preview.html"
+LABEL = "daily_news_email"
 
-configure_scheduled_outlook_env()
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger("daily_news_email")
-
-from network_env import configure_http_proxy  # noqa: E402
-
-configure_http_proxy(log=logger)
-
-
-async def send_outlook_email(subject: str, body_html: str) -> None:
-    send_html_email(
-        send_helper=SEND_HELPER,
-        log_dir=LOG_DIR,
-        recipients_arg=RECIPIENTS_ARG,
-        subject=subject,
-        body_html=body_html,
-        logger=logger,
-    )
+logger = setup_agent_logging(LABEL, "daily_news_email.log")
 
 
 def _build_for_tier(
@@ -131,35 +84,18 @@ def _build_for_tier(
 
 
 def build_report() -> tuple[str, str, int, VendorEmailMeta]:
-    def build(vendor: str, summary_model: str, meta: VendorEmailMeta) -> tuple[str, str, int]:
-        return _build_for_tier(vendor, summary_model, meta)
-
     (email_subject, report_html, count), meta = build_with_model_tier_fallback(
-        build,
+        _build_for_tier,
         logger=logger,
-        label="daily_news_email",
+        label=LABEL,
     )
-    logger.info(
-        "Email built with %s (%s)%s",
-        meta.vendor.value,
-        meta.model,
-        f" [fallback: {meta.fallback_tier}]" if meta.fallback_tier else "",
-    )
+    log_build_meta(logger, meta)
     return email_subject, report_html, count, meta
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Send daily Israeli news summary email.")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Fetch and build the report without sending email.",
-    )
-    parser.add_argument(
-        "--no-retry",
-        action="store_true",
-        help="Do not retry after failure (useful for manual testing).",
-    )
+    add_common_agent_args(parser)
     args = parser.parse_args()
 
     key_error = require_api_keys_for_daily_emails()
@@ -174,35 +110,21 @@ def main() -> int:
             logger.exception("Failed to build news report: %s", exc)
             return 1
 
-        if args.dry_run:
-            preview = APP_DIR / "logs" / "daily_news_preview.html"
-            preview.write_text(report_html, encoding="utf-8")
-            logger.info(
-                "Dry run OK — %s articles, vendor=%s, preview: %s",
-                count,
-                meta.vendor.value,
-                preview,
-            )
-            return 0
-
-        try:
-            asyncio.run(send_outlook_email(email_subject, report_html))
-        except Exception as exc:
-            logger.exception("Failed to send email: %s", exc)
-            return 1
-
-        logger.info(
-            "Email sent to %s — subject: %s — provider: %s",
-            RECIPIENTS_ARG,
-            email_subject,
-            vendor_email_label(meta),
+        return deliver_email(
+            dry_run=args.dry_run,
+            preview_path=PREVIEW_PATH,
+            subject=email_subject,
+            body_html=report_html,
+            logger=logger,
+            recipients_arg=RECIPIENTS_ARG,
+            preview_detail=f"{count} articles, vendor={meta.vendor.value}",
+            sent_detail=f"provider: {vendor_email_label(meta)}",
         )
-        return 0
 
     if args.dry_run or args.no_retry:
         return run_once()
 
-    return run_with_scheduled_retry(run_once, logger=logger, label="daily_news_email")
+    return run_with_scheduled_retry(run_once, logger=logger, label=LABEL)
 
 
 if __name__ == "__main__":

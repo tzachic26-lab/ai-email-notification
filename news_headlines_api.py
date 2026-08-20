@@ -18,6 +18,8 @@ from datetime import date, datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
+from env_config import env_flag
+
 import feedparser
 
 import truststore
@@ -476,7 +478,7 @@ def _is_excluded_source(source: str) -> bool:
 
 
 def hard_news_only_enabled() -> bool:
-    return os.getenv("DAILY_NEWS_HARD_ONLY", "1").lower() in ("1", "true", "yes")
+    return env_flag("DAILY_NEWS_HARD_ONLY", True)
 
 
 def _is_soft_news_title(title: str) -> bool:

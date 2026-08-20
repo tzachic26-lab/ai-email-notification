@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from env_config import env_flag, env_int
+
 logger = logging.getLogger(__name__)
 
 _GROUNDING_HOST = "vertexaisearch.cloud.google.com"
@@ -144,11 +146,11 @@ def _is_fake_position_id(position_id: str) -> bool:
 
 
 def linkedin_verify_enabled() -> bool:
-    return os.getenv("JOB_SEARCH_LINKEDIN_VERIFY", "1").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_LINKEDIN_VERIFY", True)
 
 
 def url_verify_enabled() -> bool:
-    return os.getenv("JOB_SEARCH_URL_VERIFY", "1").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_URL_VERIFY", True)
 
 
 def _ensure_truststore() -> None:
@@ -311,7 +313,7 @@ def _is_stale_posted_date(posted_date: str, *, max_days: int | None = None) -> b
     if not raw or raw.lower() == "unknown":
         return False
     if max_days is None:
-        max_days = int(os.getenv("JOB_SEARCH_MAX_POSTED_DAYS", "45"))
+        max_days = env_int("JOB_SEARCH_MAX_POSTED_DAYS", 45)
     try:
         posted = datetime.strptime(raw[:10], "%Y-%m-%d").date()
     except ValueError:
@@ -437,7 +439,7 @@ def evaluate_job_url(
 
 
 def pa_locations_allowed() -> bool:
-    return os.getenv("JOB_SEARCH_ALLOW_PA_LOCATIONS", "0").lower() in ("1", "true", "yes")
+    return env_flag("JOB_SEARCH_ALLOW_PA_LOCATIONS")
 
 
 def is_blocked_job_location(location: str) -> bool:
