@@ -84,16 +84,40 @@ def trainer_fallback_vendor() -> LLMVendor | None:
 def trainer_model(vendor: LLMVendor | None = None) -> str:
     v = vendor or trainer_vendor()
     if v is LLMVendor.GEMINI:
-        return os.getenv("AI_TRAINER_MODEL", "gemini-2.5-pro")
+        return os.getenv("AI_TRAINER_GEMINI_MODEL", "gemini-2.5-pro")
     return os.getenv("AI_TRAINER_MODEL", "gpt-4.1")
 
 
 def _parse_exercise_json(raw: str) -> dict:
     text = raw.strip()
+    if not text:
+        raise ValueError("Empty response from LLM")
+    
+    # Remove markdown code blocks
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
-    return json.loads(text)
+    
+    # Try to find JSON object in the text if there's extra content
+    if not text.startswith("{"):
+        # Look for first { and last }
+        start_idx = text.find("{")
+        end_idx = text.rfind("}")
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            text = text[start_idx:end_idx + 1]
+    
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        # Try to fix common JSON issues
+        # Remove any trailing commas
+        text = re.sub(r',(\s*[}\]])', r'\1', text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            raise ValueError(f"Failed to parse JSON: {e}. Original text: {text[:200]}")
+    
+    return data
 
 
 def _to_exercise(data: dict, *, model: str, vendor: str) -> TrainerExercise:
