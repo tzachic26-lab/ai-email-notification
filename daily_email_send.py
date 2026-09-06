@@ -9,10 +9,6 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from outlook_mcp_env import outlook_mcp_dir, outlook_python
-
-OUTLOOK_MCP_DIR = outlook_mcp_dir()
-OUTLOOK_PYTHON = outlook_python()
 SEND_TIMEOUT_SECONDS = 180
 DEFAULT_RETRY_DELAY_SECONDS = 10 * 60
 DEFAULT_MAX_ATTEMPTS = 3  # initial run + 2 retries
@@ -101,7 +97,7 @@ def configure_scheduled_outlook_env() -> None:
 
 
 def email_send_provider() -> str:
-    return os.getenv("EMAIL_SEND_PROVIDER", "outlook").strip().lower()
+    return os.getenv("EMAIL_SEND_PROVIDER", "gmail").strip().lower()
 
 
 def send_html_email(
@@ -125,8 +121,6 @@ def send_html_email(
 
     primary = email_send_provider()
     fallback = os.getenv("EMAIL_SEND_FALLBACK_PROVIDER", "").strip().lower()
-    if not fallback:
-        fallback = "outlook" if primary == "gmail" else ""
 
     providers = [primary]
     if fallback and fallback != primary:
@@ -181,8 +175,11 @@ def send_outlook_html_email(
     logger,
     bcc_arg: str | None = None,
 ) -> None:
-    if not OUTLOOK_PYTHON.is_file():
-        raise RuntimeError(f"Outlook MCP Python not found: {OUTLOOK_PYTHON}")
+    from outlook_mcp_env import outlook_mcp_dir, outlook_python
+
+    outlook_python = outlook_python()
+    if not outlook_python.is_file():
+        raise RuntimeError(f"Outlook MCP Python not found: {outlook_python}")
     if not send_helper.is_file():
         raise RuntimeError(f"Send helper not found: {send_helper}")
 
@@ -203,7 +200,7 @@ def send_outlook_html_email(
     env = os.environ.copy()
     apply_http_proxy_to_env(env)
 
-    cmd = [str(OUTLOOK_PYTHON), str(send_helper)]
+    cmd = [str(outlook_python), str(send_helper)]
     if env.get("OUTLOOK_SEND_NON_INTERACTIVE", "").lower() in ("1", "true", "yes"):
         cmd.append("--non-interactive")
     cmd.extend([recipients_arg, subject, html_path])
