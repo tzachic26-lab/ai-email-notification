@@ -139,6 +139,16 @@ def send_html_email(
                     to_recipients=to_recipients,
                     bcc_recipients=bcc_recipients,
                 )
+            elif provider == "resend":
+                from resend_send import send_resend_html_email
+
+                send_resend_html_email(
+                    subject=subject,
+                    body_html=body_html,
+                    logger=logger,
+                    to_recipients=to_recipients,
+                    bcc_recipients=bcc_recipients,
+                )
             else:
                 send_outlook_html_email(
                     send_helper=send_helper,
