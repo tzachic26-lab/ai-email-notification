@@ -66,6 +66,9 @@ LOG_FILE = LOG_DIR / "daily_tech_news_email.log"
 
 configure_scheduled_outlook_env()
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -74,6 +77,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
     ],
 )
+logger = logging.getLogger("daily_tech_news_email")
 logger = logging.getLogger("daily_tech_news_email")
 
 from network_env import configure_http_proxy  # noqa: E402
