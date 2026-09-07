@@ -97,7 +97,7 @@ def configure_scheduled_outlook_env() -> None:
 
 
 def email_send_provider() -> str:
-    return os.getenv("EMAIL_SEND_PROVIDER", "gmail").strip().lower()
+    return os.getenv("EMAIL_SEND_PROVIDER", "resend").strip().lower()
 
 
 def send_html_email(
