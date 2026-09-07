@@ -86,8 +86,7 @@ def send_gmail_html_email(
             smtp.sendmail(address, all_recipients, msg.as_string())
 
     logger.info(
-        "Gmail sent to %s%s (subject: %s)",
+        "Gmail sent to %s%s",
         ", ".join(to_addrs),
         f" (+{len(bcc_addrs)} BCC)" if bcc_addrs else "",
-        subject,
     )

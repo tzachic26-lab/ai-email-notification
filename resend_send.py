@@ -71,8 +71,7 @@ def send_resend_html_email(
         raise RuntimeError(f"Resend API error {response.status_code}: {response.text}")
 
     logger.info(
-        "Resend sent to %s%s (subject: %s)",
+        "Resend sent to %s%s",
         ", ".join(to_addrs),
         f" (+{len(bcc_addrs)} BCC)" if bcc_addrs else "",
-        subject,
     )

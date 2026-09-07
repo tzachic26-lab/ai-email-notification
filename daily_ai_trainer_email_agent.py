@@ -131,8 +131,7 @@ def build_resend_report(iso_date: str | None = None) -> tuple[str, str, str]:
         records=records,
     )
     logger.info(
-        "Resending exercise: %s [%s] — TO: %s, BCC: %s",
-        exercise.title,
+        "Resending exercise — date: %s — TO: %s, BCC: %s",
         target_date,
         TO_ARG,
         BCC_ARG or "(none)",
@@ -208,7 +207,7 @@ def build_report(*, save: bool = True, force: bool = False) -> tuple[str, str, s
         exercise=exercise,
         records=all_records,
     )
-    logger.info("Prepared exercise: %s [%s]", exercise.title, exercise.category)
+    logger.info("Prepared exercise (id=%s)", exercise.id)
     return email_subject, report_html, exercise.title
 
 
@@ -264,7 +263,7 @@ def main() -> int:
         if args.dry_run:
             preview = LOG_DIR / "daily_ai_trainer_preview.html"
             preview.write_text(report_html, encoding="utf-8")
-            logger.info("Dry run OK — exercise: %s, preview: %s", title, preview)
+            logger.info("Dry run OK — preview: %s", preview)
             return 0
 
         try:
@@ -274,10 +273,9 @@ def main() -> int:
             return 1
 
         logger.info(
-            "Email sent — TO: %s%s — subject: %s",
+            "Email sent — TO: %s%s",
             TO_ARG,
             f", BCC: {BCC_ARG}" if BCC_ARG else "",
-            email_subject,
         )
         return 0
 

@@ -11,6 +11,7 @@ Run the REST API:
 """
 
 import html
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -68,7 +69,7 @@ DEEP_QUESTION_HINTS = (
 INPUT_PRICE_PER_M = 0.10
 OUTPUT_PRICE_PER_M = 0.40
 MAX_ARTICLES = 10
-EMAIL_MAX_ARTICLES = 5
+EMAIL_MAX_ARTICLES = 3
 EMAIL_MAX_TECH_ARTICLES = 8
 MIN_SUMMARY_WORDS = 200
 MAX_SUMMARY_WORDS = 400
@@ -235,16 +236,25 @@ ISRAELI_SOURCES = (
 )
 
 SUMMARY_PROMPT = f"""You are an expert Israeli news editor writing for a serious, well-informed audience.
-Write a detailed, precise news summary in natural Israeli Hebrew.
+Write a detailed, precise news summary in natural Israeli Hebrew based ONLY on the provided sources.
+
+CRITICAL RULES - ABSOLUTELY FORBIDDEN:
+1. Do NOT invent facts, quotes, numbers, names, or timelines not supported by the source material
+2. Do NOT guess or fill in missing information
+3. Do NOT add speculation or assumptions
+4. If information is insufficient, write only what is explicitly stated
+5. Every sentence must be grounded in the provided sources
+6. Do NOT add gossip, sensationalism, or filler phrases
 
 EDITORIAL STANDARDS:
 - Be as accurate and detailed as possible within the word limit — every sentence should carry factual weight.
-- Stick strictly to the headline, source, and snippet provided. Do not drift from the reported story.
+- Stick strictly to the headline, source, snippet, and web search context provided.
+- Do NOT drift from the reported story.
 - Do NOT invent facts, quotes, numbers, names, or timelines not supported by the source material.
 - Do NOT add gossip, speculation, sensationalism, moralizing, or filler phrases.
 - Do NOT write shallow or "clickbait-style" prose — no empty hype, no vague generalities.
 - If the snippet lacks detail, say explicitly what is known and what remains unconfirmed.
-- You may add only brief, widely established background context that helps understand the event — not new claims.
+- You may add only brief context from the web search results provided.
 
 CONTENT FOCUS (hard news only — חדשות קשות בלבד):
 - Politics, government, security, diplomacy, economy, legislation, and major public policy.
@@ -253,7 +263,7 @@ CONTENT FOCUS (hard news only — חדשות קשות בלבד):
 - Do NOT cover entertainment, celebrities, sports, gossip, culture, leisure, or lifestyle fluff.
 - What happened, who is involved, when and where (as reported), and verified consequences so far.
 - Why it matters for Israel and for the reader — policy, security, economy, society, or diplomacy as relevant.
-- Cause-and-effect and context only when grounded in the snippet or uncontroversial public knowledge.
+- Use ONLY information from the provided sources (RSS snippets + web search context).
 
 FORMAT:
 - Between {MIN_SUMMARY_WORDS} and {MAX_SUMMARY_WORDS} words.
@@ -688,8 +698,8 @@ def _select_balanced_items(candidates: list[dict], *, max_articles: int = MAX_AR
         missing.append(ISRAEL_HAYOM_OFFICIAL)
     if missing:
         logger.warning(
-            "No today article from preferred source(s) %s — continuing with other outlets",
-            ", ".join(missing),
+            "No today article from %s preferred source(s) — continuing with other outlets",
+            len(missing),
         )
 
     selected: list[dict] = []
@@ -749,6 +759,7 @@ def _summarize_with_nano(
     *,
     summary_model: str = MODEL,
     vendor: str | None = None,
+    use_web_search: bool = False,
 ) -> tuple[str, TokenUsage]:
     """Use the configured model/vendor to write a Hebrew summary (200-400 words) for one news item."""
     from llm_providers import (
@@ -758,9 +769,20 @@ def _summarize_with_nano(
         resolve_vendor,
         summarize_with_vendor,
     )
+    
+    # Search web for additional context if enabled
+    web_context = ""
+    if use_web_search:
+        try:
+            from israel_top_news_api import _search_web_context
+            web_context = _search_web_context(title, max_results=3)
+            if web_context:
+                logging.info(f"Retrieved web context for: {title[:50]}")
+        except Exception as exc:
+            logging.warning(f"Failed to search web for context: {exc}")
 
     resolved_vendor = resolve_vendor(vendor)
-    user_message = _summary_user_message(title, source, snippet, subject, date, published_at)
+    user_message = _summary_user_message(title, source, snippet, subject, date, published_at, web_context)
     system_prompt = SUMMARY_PROMPT
     use_grounding = False
     if resolved_vendor is LLMVendor.GEMINI and gemini_grounding_enabled():
@@ -781,18 +803,24 @@ def _summarize_with_nano(
 
 
 def _summary_user_message(
-    title: str, source: str, snippet: str, subject: str, date: str, published_at: str = ""
+    title: str, source: str, snippet: str, subject: str, date: str, published_at: str = "", web_context: str = ""
 ) -> str:
     publish_line = format_publish_date_display(date, published_at)
-    return (
+    message = (
         f"נושא כללי: {subject}\n"
         f"כותרת: {title}\n"
         f"מקור: {source}\n"
         + (f"{publish_line}\n" if publish_line else f"תאריך: {date}\n")
-        + f"תקציר: {snippet or 'לא סופק תקציר'}\n\n"
-        f"כתוב סיכום חדשותי קשה בלבד בעברית (לא תרבות, לא רכילות, לא בילויים/בידור/ספורט) "
-        f"בין {MIN_SUMMARY_WORDS} ל-{MAX_SUMMARY_WORDS} מילים."
+        + f"תקציר: {snippet or 'לא סופק תקציר'}\n"
     )
+    
+    if web_context:
+        message += f"\nהקשר נוסף מהרשת:\n{web_context}\n"
+    
+    message += f"\nכתוב סיכום חדשותי קשה בלבד בעברית (לא תרבות, לא רכילות, לא בילויים/בידור/ספורט) "
+    message += f"בין {MIN_SUMMARY_WORDS} ל-{MAX_SUMMARY_WORDS} מילים."
+    
+    return message
 
 
 def _summarize_rss_item(
@@ -801,6 +829,7 @@ def _summarize_rss_item(
     *,
     summary_model: str = MODEL,
     vendor: str | None = None,
+    use_web_search: bool = False,
 ) -> tuple[Article | None, TokenUsage]:
     """Summarize one RSS item into an Article (for parallel execution)."""
     summary, tokens = _summarize_with_nano(
@@ -812,6 +841,7 @@ def _summarize_rss_item(
         item.get("published_at", ""),
         summary_model=summary_model,
         vendor=vendor,
+        use_web_search=use_web_search,
     )
     if not summary or not _is_usable_news_summary(summary):
         import logging
@@ -964,7 +994,7 @@ def fetch_articles(
 
     from llm_providers import LLMVendor, resolve_vendor
 
-    pool_size = max(max_articles * 4, 20)
+    pool_size = max(max_articles * 2, 8)
     rss_items = _fetch_israel_rss_items(subject, max_articles=pool_size)
     if not rss_items:
         raise ValueError(f"No Israeli news from today ({TODAY}) was found for this subject")
@@ -976,6 +1006,7 @@ def fetch_articles(
         subject=subject,
         summary_model=summary_model,
         vendor=vendor,
+        use_web_search=False,  # Disabled by default for daily news to avoid slowdown
     )
     resolved_vendor = resolve_vendor(vendor)
     workers = 1 if resolved_vendor is LLMVendor.GEMINI else min(4, len(rss_items))
@@ -1682,7 +1713,7 @@ def headlines_for_prompt(subject: str):
 
     with ThreadPoolExecutor(max_workers=len(rss_items)) as executor:
         futures = {
-            executor.submit(_summarize_rss_item, item, subject): index
+            executor.submit(_summarize_rss_item, item, subject, use_web_search=False): index
             for index, item in enumerate(rss_items)
         }
         for future in as_completed(futures):

@@ -104,8 +104,7 @@ def _build_for_tier(
     provider_label = vendor_email_label(meta)
     footer_label = vendor_email_footer_label(meta)
     logger.info(
-        "Fetching AI/ML tech articles for topic: %s (vendor=%s, model=%s)",
-        NEWS_TOPIC,
+        "Fetching AI/ML tech articles (vendor=%s, model=%s)",
         vendor,
         summary_model,
     )
@@ -199,9 +198,8 @@ def main() -> int:
             return 1
 
         logger.info(
-            "Email sent to %s — subject: %s — provider: %s",
+            "Email sent to %s — provider: %s",
             RECIPIENT,
-            email_subject,
             vendor_email_label(meta),
         )
         return 0
